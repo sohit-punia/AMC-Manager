@@ -1,15 +1,25 @@
+
 import { useState, useEffect } from "react";
 import "./App.css";
 
 function App() {
-  const [activePage, setActivePage] = useState("records");
+  const [activePage, setActivePage] =
+    useState("records");
 
-  const [records, setRecords] = useState([]);
-  const [editingId, setEditingId] = useState(null);
-  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [records, setRecords] =
+    useState([]);
 
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [editingId, setEditingId] =
+    useState(null);
+
+  const [selectedRecord, setSelectedRecord] =
+    useState(null);
+
+  const [selectedFiles, setSelectedFiles] =
+    useState([]);
+
+  const [searchTerm, setSearchTerm] =
+    useState("");
 
   const [formData, setFormData] = useState({
     projectNumber: "",
@@ -29,24 +39,29 @@ function App() {
      FETCH RECORDS
   ========================= */
 
-  const fetchRecords = () => {
-    fetch("http://localhost:5000/api/records")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to fetch records");
-        }
+  const fetchRecords = async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:5000/api/records"
+      );
 
-        return response.json();
-      })
-      .then((data) => {
-        setRecords(data);
-      })
-      .catch((error) => {
-        console.error(
-          "Error fetching records:",
-          error
+      if (!response.ok) {
+        throw new Error(
+          "Failed to fetch records"
         );
-      });
+      }
+
+      const data = await response.json();
+
+      setRecords(
+        Array.isArray(data) ? data : []
+      );
+    } catch (error) {
+      console.error(
+        "Error fetching records:",
+        error
+      );
+    }
   };
 
   useEffect(() => {
@@ -54,13 +69,149 @@ function App() {
   }, []);
 
   /* =========================
+     CALCULATE NEXT AMC DATE
+
+     Quarterly   = +3 months
+     Half Yearly = +6 months
+     Yearly      = +12 months
+  ========================= */
+
+  const calculateNextAMCDate = (
+    lastAMCDate,
+    amcType,
+    amcEndDate = ""
+  ) => {
+    if (
+      !lastAMCDate ||
+      !amcType
+    ) {
+      return "";
+    }
+
+    const monthsToAdd = {
+      Quarterly: 3,
+      "Half Yearly": 6,
+      Yearly: 12,
+    }[amcType];
+
+    if (!monthsToAdd) {
+      return "";
+    }
+
+    const parts =
+      lastAMCDate.split("-");
+
+    if (parts.length !== 3) {
+      return "";
+    }
+
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    const day = Number(parts[2]);
+
+    if (
+      !Number.isInteger(year) ||
+      !Number.isInteger(month) ||
+      !Number.isInteger(day) ||
+      month < 1 ||
+      month > 12 ||
+      day < 1 ||
+      day > 31
+    ) {
+      return "";
+    }
+
+    /*
+      Convert the date into a month index.
+      This handles month-end dates correctly.
+
+      Example:
+
+      31 Jan + 3 months -> 30 Apr
+      31 Aug + 6 months -> 28/29 Feb
+    */
+
+    const totalMonths =
+      year * 12 +
+      (month - 1) +
+      monthsToAdd;
+
+    const targetYear =
+      Math.floor(totalMonths / 12);
+
+    const targetMonthIndex =
+      totalMonths % 12;
+
+    const daysInTargetMonth =
+      new Date(
+        targetYear,
+        targetMonthIndex + 1,
+        0
+      ).getDate();
+
+    const targetDay = Math.min(
+      day,
+      daysInTargetMonth
+    );
+
+    const nextDate =
+      `${targetYear}-${String(
+        targetMonthIndex + 1
+      ).padStart(2, "0")}-${String(
+        targetDay
+      ).padStart(2, "0")}`;
+
+    /*
+      If the next scheduled visit is
+      beyond the overall AMC contract end,
+      there is no next AMC within this contract.
+    */
+
+    if (
+      amcEndDate &&
+      nextDate > amcEndDate
+    ) {
+      return "";
+    }
+
+    return nextDate;
+  };
+
+  /* =========================
      FORM CHANGE
   ========================= */
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setFormData((previous) => {
+      const updated = {
+        ...previous,
+        [name]: value,
+      };
+
+      /*
+        Automatically calculate Next AMC
+        whenever any of these change.
+      */
+
+      if (
+        name === "lastAMCDate" ||
+        name === "amcType" ||
+        name === "amcEndDate"
+      ) {
+        updated.nextAMCDate =
+          calculateNextAMCDate(
+            updated.lastAMCDate,
+            updated.amcType,
+            updated.amcEndDate
+          );
+      }
+
+      return updated;
     });
   };
 
@@ -70,7 +221,9 @@ function App() {
 
   const handleFileChange = (e) => {
     setSelectedFiles(
-      Array.from(e.target.files || [])
+      Array.from(
+        e.target.files || []
+      )
     );
   };
 
@@ -97,37 +250,188 @@ function App() {
   };
 
   /* =========================
+     VALIDATE FORM
+  ========================= */
+
+  const validateForm = () => {
+    if (!formData.projectNumber.trim()) {
+      alert(
+        "Please enter Project Number."
+      );
+      return false;
+    }
+
+    if (!formData.companyName.trim()) {
+      alert(
+        "Please enter Company Name."
+      );
+      return false;
+    }
+
+    if (!formData.amcStartDate) {
+      alert(
+        "Please enter AMC Start Date."
+      );
+      return false;
+    }
+
+    if (!formData.amcEndDate) {
+      alert(
+        "Please enter AMC End Date."
+      );
+      return false;
+    }
+
+    if (!formData.lastAMCDate) {
+      alert(
+        "Please enter Last AMC Date."
+      );
+      return false;
+    }
+
+    if (
+      formData.amcEndDate <
+      formData.amcStartDate
+    ) {
+      alert(
+        "AMC End Date cannot be before AMC Start Date."
+      );
+      return false;
+    }
+
+    if (
+      formData.lastAMCDate <
+      formData.amcStartDate
+    ) {
+      alert(
+        "Last AMC Date cannot be before AMC Start Date."
+      );
+      return false;
+    }
+
+    if (
+      formData.lastAMCDate >
+      formData.amcEndDate
+    ) {
+      alert(
+        "Last AMC Date cannot be after AMC End Date."
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  /* =========================
      ADD / UPDATE RECORD
   ========================= */
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       const url = editingId
         ? `http://localhost:5000/api/records/${editingId}`
         : "http://localhost:5000/api/records";
 
-      const method = editingId ? "PUT" : "POST";
+      const method = editingId
+        ? "PUT"
+        : "POST";
 
-      const dataToSend = new FormData();
+      /*
+        Always calculate the Next AMC Date
+        one final time before sending.
+      */
 
-      Object.entries(formData).forEach(
-        ([key, value]) => {
-          dataToSend.append(key, value);
+      const calculatedNextAMCDate =
+        calculateNextAMCDate(
+          formData.lastAMCDate,
+          formData.amcType,
+          formData.amcEndDate
+        );
+
+      const dataToSend =
+        new FormData();
+
+      dataToSend.append(
+        "projectNumber",
+        formData.projectNumber
+      );
+
+      dataToSend.append(
+        "companyName",
+        formData.companyName
+      );
+
+      dataToSend.append(
+        "companyAddress",
+        formData.companyAddress
+      );
+
+      dataToSend.append(
+        "contactPerson",
+        formData.contactPerson
+      );
+
+      dataToSend.append(
+        "phoneNumber",
+        formData.phoneNumber
+      );
+
+      dataToSend.append(
+        "amcType",
+        formData.amcType
+      );
+
+      dataToSend.append(
+        "amcStartDate",
+        formData.amcStartDate
+      );
+
+      dataToSend.append(
+        "amcEndDate",
+        formData.amcEndDate
+      );
+
+      dataToSend.append(
+        "lastAMCDate",
+        formData.lastAMCDate
+      );
+
+      dataToSend.append(
+        "nextAMCDate",
+        calculatedNextAMCDate
+      );
+
+      dataToSend.append(
+        "remarks",
+        formData.remarks
+      );
+
+      selectedFiles.forEach(
+        (file) => {
+          dataToSend.append(
+            "documents",
+            file
+          );
         }
       );
 
-      selectedFiles.forEach((file) => {
-        dataToSend.append("documents", file);
-      });
+      const response =
+        await fetch(
+          url,
+          {
+            method,
+            body: dataToSend,
+          }
+        );
 
-      const response = await fetch(url, {
-        method,
-        body: dataToSend,
-      });
-
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         alert(
@@ -145,9 +449,10 @@ function App() {
 
       resetForm();
 
+      setEditingId(null);
+
       await fetchRecords();
 
-      setEditingId(null);
       setActivePage("records");
     } catch (error) {
       console.error(
@@ -156,7 +461,7 @@ function App() {
       );
 
       alert(
-        "Something went wrong while saving the record"
+        "Something went wrong while saving the record."
       );
     }
   };
@@ -165,18 +470,36 @@ function App() {
      AMC STATUS
   ========================= */
 
-  const getStatus = (nextAMCDate) => {
+  const getStatus = (
+    nextAMCDate
+  ) => {
     if (!nextAMCDate) {
       return "Upcoming";
     }
 
-    const today = new Date();
+    const today = new Date(
+      nextAMCDate
+        ? new Date()
+        : new Date()
+    );
+
     const nextDate = new Date(
       nextAMCDate
     );
 
-    today.setHours(0, 0, 0, 0);
-    nextDate.setHours(0, 0, 0, 0);
+    today.setHours(
+      0,
+      0,
+      0,
+      0
+    );
+
+    nextDate.setHours(
+      0,
+      0,
+      0,
+      0
+    );
 
     const difference = Math.ceil(
       (nextDate - today) /
@@ -198,28 +521,49 @@ function App() {
      EDIT RECORD
   ========================= */
 
-  const handleEdit = (record) => {
+  const handleEdit = (
+    record
+  ) => {
+    const calculatedNextAMCDate =
+      calculateNextAMCDate(
+        record.lastAMCDate || "",
+        record.amcType ||
+          "Quarterly",
+        record.amcEndDate || ""
+      );
+
     setFormData({
       projectNumber:
         record.projectNumber || "",
+
       companyName:
         record.companyName || "",
+
       companyAddress:
         record.companyAddress || "",
+
       contactPerson:
         record.contactPerson || "",
+
       phoneNumber:
         record.phoneNumber || "",
+
       amcType:
-        record.amcType || "Quarterly",
+        record.amcType ||
+        "Quarterly",
+
       amcStartDate:
         record.amcStartDate || "",
+
       amcEndDate:
         record.amcEndDate || "",
+
       lastAMCDate:
         record.lastAMCDate || "",
+
       nextAMCDate:
-        record.nextAMCDate || "",
+        calculatedNextAMCDate,
+
       remarks:
         record.remarks || "",
     });
@@ -233,7 +577,9 @@ function App() {
      VIEW DETAILS
   ========================= */
 
-  const handleViewDetails = (record) => {
+  const handleViewDetails = (
+    record
+  ) => {
     setSelectedRecord(record);
     setActivePage("details");
   };
@@ -242,21 +588,26 @@ function App() {
      DELETE RECORD
   ========================= */
 
-  const handleDelete = async (id) => {
-    const confirmDelete =
+  const handleDelete = async (
+    id
+  ) => {
+    const confirmed =
       window.confirm(
         "Are you sure you want to delete this record?"
       );
 
-    if (!confirmDelete) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/records/${id}`,
-        {
-          method: "DELETE",
-        }
-      );
+      const response =
+        await fetch(
+          `http://localhost:5000/api/records/${id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
       const data =
         await response.json();
@@ -284,25 +635,42 @@ function App() {
       );
 
       alert(
-        "Something went wrong while deleting"
+        "Something went wrong while deleting."
       );
     }
   };
 
   /* =========================
      AMC LEFT
+     TOTAL CONTRACT TIME LEFT
   ========================= */
 
-  const getAMCLeft = (amcEndDate) => {
-    if (!amcEndDate) return "-";
+  const getAMCLeft = (
+    amcEndDate
+  ) => {
+    if (!amcEndDate) {
+      return "End Date Required";
+    }
 
-    const today = new Date();
-    const endDate = new Date(
-      amcEndDate
+    const today =
+      new Date();
+
+    const endDate =
+      new Date(amcEndDate);
+
+    today.setHours(
+      0,
+      0,
+      0,
+      0
     );
 
-    today.setHours(0, 0, 0, 0);
-    endDate.setHours(0, 0, 0, 0);
+    endDate.setHours(
+      0,
+      0,
+      0,
+      0
+    );
 
     if (endDate < today) {
       return "Expired";
@@ -316,7 +684,7 @@ function App() {
       endDate.getMonth() -
       today.getMonth();
 
-    let days =
+    const days =
       endDate.getDate() -
       today.getDate();
 
@@ -329,7 +697,10 @@ function App() {
       months += 12;
     }
 
-    if (years > 0 && months > 0) {
+    if (
+      years > 0 &&
+      months > 0
+    ) {
       return `${years} Year ${months} Month`;
     }
 
@@ -341,60 +712,87 @@ function App() {
       return `${months} Month`;
     }
 
-    return `${Math.max(
-      0,
-      Math.ceil(
-        (endDate - today) /
-          (1000 * 60 * 60 * 24)
-      )
-    )} Days`;
+    const remainingDays =
+      Math.max(
+        0,
+        Math.ceil(
+          (endDate - today) /
+            (1000 * 60 * 60 * 24)
+        )
+      );
+
+    return `${remainingDays} Days`;
   };
 
   /* =========================
      DOCUMENTS
   ========================= */
 
-  const getDocuments = (record) => {
+  const getDocuments = (
+    record
+  ) => {
     if (!record) {
       return [];
     }
 
-    let documents = record.document || [];
+    let documents =
+      record.document || [];
 
-    if (typeof documents === "string") {
+    if (
+      typeof documents ===
+      "string"
+    ) {
       try {
-        documents = JSON.parse(
-          documents
-        );
+        documents =
+          JSON.parse(
+            documents
+          );
       } catch {
-        documents = documents
-          ? [
-              {
-                name: documents
-                  .split("/")
-                  .pop(),
-                path: documents,
-              },
-            ]
-          : [];
+        documents =
+          documents
+            ? [
+                {
+                  name: documents
+                    .replace(
+                      /\\/g,
+                      "/"
+                    )
+                    .split("/")
+                    .pop(),
+
+                  path: documents,
+                },
+              ]
+            : [];
       }
     }
 
-    if (!Array.isArray(documents)) {
-      documents = [documents];
+    if (
+      !Array.isArray(
+        documents
+      )
+    ) {
+      documents = [
+        documents,
+      ];
     }
 
     return documents;
   };
 
-  const getDocumentUrl = (document) => {
+  const getDocumentUrl = (
+    document
+  ) => {
     if (!document) {
       return "";
     }
 
     let filePath = "";
 
-    if (typeof document === "string") {
+    if (
+      typeof document ===
+      "string"
+    ) {
       filePath = document;
     } else {
       filePath =
@@ -419,12 +817,15 @@ function App() {
       return filePath;
     }
 
-    filePath = filePath.replace(
-      /\\/g,
-      "/"
-    );
+    filePath =
+      filePath.replace(
+        /\\/g,
+        "/"
+      );
 
-    if (filePath.startsWith("/")) {
+    if (
+      filePath.startsWith("/")
+    ) {
       return `http://localhost:5000${filePath}`;
     }
 
@@ -436,12 +837,20 @@ function App() {
     index
   ) => {
     if (!document) {
-      return `Document ${index + 1}`;
+      return `Document ${
+        index + 1
+      }`;
     }
 
-    if (typeof document === "string") {
+    if (
+      typeof document ===
+      "string"
+    ) {
       return document
-        .replace(/\\/g, "/")
+        .replace(
+          /\\/g,
+          "/"
+        )
         .split("/")
         .pop();
     }
@@ -450,7 +859,9 @@ function App() {
       document.name ||
       document.originalname ||
       document.filename ||
-      `Document ${index + 1}`
+      `Document ${
+        index + 1
+      }`
     );
   };
 
@@ -458,131 +869,171 @@ function App() {
      SEARCH
   ========================= */
 
-  const filteredRecords = records.filter(
-    (record) =>
-      record.projectNumber
-        ?.toLowerCase()
-        .includes(
-          searchTerm.toLowerCase()
+  const filteredRecords =
+    records.filter(
+      (record) =>
+        String(
+          record.projectNumber ||
+            ""
         )
-  );
+          .toLowerCase()
+          .includes(
+            searchTerm.toLowerCase()
+          )
+    );
 
   /* =========================
      DASHBOARD
   ========================= */
 
-  const dashboardToday = new Date();
-  dashboardToday.setHours(0, 0, 0, 0);
+  const dashboardToday =
+    new Date();
 
-  const runningAMC = records.filter(
-    (record) => {
-      if (
-        !record.amcStartDate ||
-        !record.amcEndDate
-      ) {
-        return false;
-      }
-
-      const startDate = new Date(
-        record.amcStartDate
-      );
-
-      const endDate = new Date(
-        record.amcEndDate
-      );
-
-      startDate.setHours(0, 0, 0, 0);
-      endDate.setHours(0, 0, 0, 0);
-
-      return (
-        startDate <= dashboardToday &&
-        endDate >= dashboardToday
-      );
-    }
+  dashboardToday.setHours(
+    0,
+    0,
+    0,
+    0
   );
 
-  const missedAMC = records.filter(
-    (record) => {
-      if (!record.nextAMCDate) {
-        return false;
+  /*
+    RUNNING AMC
+
+    The AMC contract itself is
+    currently active.
+  */
+
+  const runningAMC =
+    records.filter(
+      (record) => {
+        if (
+          !record.amcStartDate ||
+          !record.amcEndDate
+        ) {
+          return false;
+        }
+
+        const startDate =
+          new Date(
+            record.amcStartDate
+          );
+
+        const endDate =
+          new Date(
+            record.amcEndDate
+          );
+
+        startDate.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+
+        endDate.setHours(
+          0,
+          0,
+          0,
+          0
+        );
+
+        return (
+          startDate <=
+            dashboardToday &&
+          endDate >=
+            dashboardToday
+        );
       }
+    );
 
-      const nextDate = new Date(
-        record.nextAMCDate
-      );
+  /*
+    VISIT STATUS
 
-      nextDate.setHours(0, 0, 0, 0);
+    Mutually exclusive:
+      Missed
+      Due Soon
+      Upcoming
+  */
 
-      return nextDate < dashboardToday;
-    }
-  );
+  const missedAMC =
+    records.filter(
+      (record) =>
+        getStatus(
+          record.nextAMCDate
+        ) === "Missed"
+    );
 
-  const upcomingAMC = records.filter(
-    (record) => {
-      if (!record.nextAMCDate) {
-        return false;
-      }
+  const dueSoonAMC =
+    records.filter(
+      (record) =>
+        getStatus(
+          record.nextAMCDate
+        ) === "Due Soon"
+    );
 
-      const nextDate = new Date(
-        record.nextAMCDate
-      );
+  const upcomingAMC =
+    records.filter(
+      (record) =>
+        getStatus(
+          record.nextAMCDate
+        ) === "Upcoming"
+    );
 
-      nextDate.setHours(0, 0, 0, 0);
-
-      return nextDate >= dashboardToday;
-    }
-  );
-
-  const dashboardTotal =
-    runningAMC.length +
+  const visitStatusTotal =
     missedAMC.length +
+    dueSoonAMC.length +
     upcomingAMC.length;
 
-  const runningPercent =
-    dashboardTotal > 0
-      ? (runningAMC.length /
-          dashboardTotal) *
+  const missedPercent =
+    visitStatusTotal > 0
+      ? (missedAMC.length /
+          visitStatusTotal) *
+        100
+      : 0;
+
+  const dueSoonPercent =
+    visitStatusTotal > 0
+      ? (dueSoonAMC.length /
+          visitStatusTotal) *
         100
       : 0;
 
   const upcomingPercent =
-    dashboardTotal > 0
+    visitStatusTotal > 0
       ? (upcomingAMC.length /
-          dashboardTotal) *
-        100
-      : 0;
-
-  const missedPercent =
-    dashboardTotal > 0
-      ? (missedAMC.length /
-          dashboardTotal) *
+          visitStatusTotal) *
         100
       : 0;
 
   return (
     <div className="app">
 
-      {/* SIDEBAR */}
+      {/* =========================
+          SIDEBAR
+      ========================= */}
+
       <aside className="sidebar">
+
         <div className="logo">
           <h2>AMC Manager</h2>
-          <p>Record Management</p>
+          <p>
+            Record Management
+          </p>
         </div>
 
         <div className="menu">
 
-          {/* =====================
-              DASHBOARD
-          ====================== */}
-
           <button
             className={`menu-item ${
-              activePage === "dashboard"
+              activePage ===
+              "dashboard"
                 ? "active"
                 : ""
             }`}
             onClick={() =>
-              setActivePage("dashboard")
+              setActivePage(
+                "dashboard"
+              )
             }
           >
             📊 Dashboard
@@ -590,12 +1041,15 @@ function App() {
 
           <button
             className={`menu-item ${
-              activePage === "records"
+              activePage ===
+              "records"
                 ? "active"
                 : ""
             }`}
             onClick={() =>
-              setActivePage("records")
+              setActivePage(
+                "records"
+              )
             }
           >
             📋 All Records
@@ -610,7 +1064,9 @@ function App() {
             onClick={() => {
               resetForm();
               setEditingId(null);
-              setActivePage("add");
+              setActivePage(
+                "add"
+              );
             }}
           >
             ➕ Add Record
@@ -618,32 +1074,44 @@ function App() {
 
           <button
             className={`menu-item ${
-              activePage === "upcoming"
+              activePage ===
+              "upcoming"
                 ? "active"
                 : ""
             }`}
             onClick={() =>
-              setActivePage("upcoming")
+              setActivePage(
+                "upcoming"
+              )
             }
           >
             📅 Upcoming AMC
           </button>
 
         </div>
+
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* =========================
+          MAIN CONTENT
+      ========================= */}
+
       <main className="main-content">
 
-        {/* =====================
+        {/* =========================
             DASHBOARD
-        ====================== */}
+        ========================= */}
 
-        {activePage === "dashboard" && (
+        {activePage ===
+          "dashboard" && (
           <>
+
             <div className="header">
               <div>
-                <h1>Dashboard</h1>
+                <h1>
+                  Dashboard
+                </h1>
+
                 <p>
                   Overview of your AMC records
                 </p>
@@ -658,11 +1126,13 @@ function App() {
                 </div>
 
                 <div className="dashboard-card-number">
-                  {runningAMC.length}
+                  {
+                    runningAMC.length
+                  }
                 </div>
 
                 <div className="dashboard-card-text">
-                  Currently active
+                  Currently active contracts
                 </div>
               </div>
 
@@ -672,11 +1142,13 @@ function App() {
                 </div>
 
                 <div className="dashboard-card-number">
-                  {upcomingAMC.length}
+                  {
+                    upcomingAMC.length
+                  }
                 </div>
 
                 <div className="dashboard-card-text">
-                  Upcoming visits
+                  More than 7 days away
                 </div>
               </div>
 
@@ -686,7 +1158,9 @@ function App() {
                 </div>
 
                 <div className="dashboard-card-number">
-                  {missedAMC.length}
+                  {
+                    missedAMC.length
+                  }
                 </div>
 
                 <div className="dashboard-card-text">
@@ -697,97 +1171,146 @@ function App() {
             </div>
 
             <div className="dashboard-chart-card">
-              <h2>AMC Overview</h2>
+
+              <h2>
+                AMC Visit Overview
+              </h2>
 
               <div className="chart-row">
+
                 <div className="chart-label">
-                  <span>Running AMC</span>
+                  <span>
+                    Upcoming AMC
+                  </span>
+
                   <strong>
-                    {runningAMC.length}
+                    {
+                      upcomingAMC.length
+                    }
                   </strong>
                 </div>
 
                 <div className="chart-bar">
-                  <div
-                    className="chart-bar-running"
-                    style={{
-                      width: `${runningPercent}%`,
-                    }}
-                  />
-                </div>
-              </div>
 
-              <div className="chart-row">
-                <div className="chart-label">
-                  <span>Upcoming AMC</span>
-                  <strong>
-                    {upcomingAMC.length}
-                  </strong>
-                </div>
-
-                <div className="chart-bar">
                   <div
                     className="chart-bar-upcoming"
                     style={{
                       width: `${upcomingPercent}%`,
                     }}
                   />
+
                 </div>
+
               </div>
 
               <div className="chart-row">
+
                 <div className="chart-label">
-                  <span>Missed AMC</span>
+                  <span>
+                    Due Soon
+                  </span>
+
                   <strong>
-                    {missedAMC.length}
+                    {
+                      dueSoonAMC.length
+                    }
                   </strong>
                 </div>
 
                 <div className="chart-bar">
+
+                  <div
+                    className="chart-bar-running"
+                    style={{
+                      width: `${dueSoonPercent}%`,
+                      backgroundColor:
+                        "#f97316",
+                    }}
+                  />
+
+                </div>
+
+              </div>
+
+              <div className="chart-row">
+
+                <div className="chart-label">
+                  <span>
+                    Missed AMC
+                  </span>
+
+                  <strong>
+                    {
+                      missedAMC.length
+                    }
+                  </strong>
+                </div>
+
+                <div className="chart-bar">
+
                   <div
                     className="chart-bar-missed"
                     style={{
                       width: `${missedPercent}%`,
                     }}
                   />
+
                 </div>
+
               </div>
+
             </div>
 
             <div className="dashboard-summary">
 
               <div>
-                <span>Total Records</span>
+                <span>
+                  Total Records
+                </span>
+
                 <strong>
                   {records.length}
                 </strong>
               </div>
 
               <div>
-                <span>Running AMC</span>
+                <span>
+                  Running AMC
+                </span>
+
                 <strong>
-                  {runningAMC.length}
+                  {
+                    runningAMC.length
+                  }
                 </strong>
               </div>
 
               <div>
-                <span>Missed AMC</span>
+                <span>
+                  Due Soon
+                </span>
+
                 <strong>
-                  {missedAMC.length}
+                  {
+                    dueSoonAMC.length
+                  }
                 </strong>
               </div>
 
             </div>
+
           </>
         )}
 
-        {/* =====================
+        {/* =========================
             RECORD DETAILS
-        ====================== */}
+        ========================= */}
 
-        {activePage === "details" &&
+        {activePage ===
+          "details" &&
           selectedRecord && (
             <>
+
               <div className="header">
 
                 <div>
@@ -804,7 +1327,10 @@ function App() {
                 <button
                   className="cancel-btn"
                   onClick={() => {
-                    setSelectedRecord(null);
+                    setSelectedRecord(
+                      null
+                    );
+
                     setActivePage(
                       "records"
                     );
@@ -817,7 +1343,6 @@ function App() {
 
               <div className="details-container">
 
-                {/* COMPANY */}
                 <div className="details-card">
 
                   <h2>
@@ -832,8 +1357,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.projectNumber ||
-                          "-"}
+                        {
+                          selectedRecord.projectNumber ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -843,8 +1370,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.companyName ||
-                          "-"}
+                        {
+                          selectedRecord.companyName ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -854,8 +1383,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.companyAddress ||
-                          "-"}
+                        {
+                          selectedRecord.companyAddress ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -865,8 +1396,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.contactPerson ||
-                          "-"}
+                        {
+                          selectedRecord.contactPerson ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -876,18 +1409,22 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.phoneNumber ||
-                          "-"}
+                        {
+                          selectedRecord.phoneNumber ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
                   </div>
+
                 </div>
 
-                {/* AMC */}
                 <div className="details-card">
 
-                  <h2>AMC Details</h2>
+                  <h2>
+                    AMC Details
+                  </h2>
 
                   <div className="details-grid">
 
@@ -897,8 +1434,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.amcType ||
-                          "-"}
+                        {
+                          selectedRecord.amcType ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -908,9 +1447,11 @@ function App() {
                       </span>
 
                       <strong>
-                        {getAMCLeft(
-                          selectedRecord.amcEndDate
-                        )}
+                        {
+                          getAMCLeft(
+                            selectedRecord.amcEndDate
+                          )
+                        }
                       </strong>
                     </div>
 
@@ -920,8 +1461,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.amcStartDate ||
-                          "-"}
+                        {
+                          selectedRecord.amcStartDate ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -931,8 +1474,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.amcEndDate ||
-                          "-"}
+                        {
+                          selectedRecord.amcEndDate ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -942,8 +1487,10 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.lastAMCDate ||
-                          "-"}
+                        {
+                          selectedRecord.lastAMCDate ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
@@ -953,51 +1500,64 @@ function App() {
                       </span>
 
                       <strong>
-                        {selectedRecord.nextAMCDate ||
-                          "-"}
+                        {
+                          selectedRecord.nextAMCDate ||
+                          "-"
+                        }
                       </strong>
                     </div>
 
                     <div className="detail-item">
-                      <span>Status</span>
+                      <span>
+                        Status
+                      </span>
 
                       <strong>
+
                         <span
                           className={`status ${
                             getStatus(
                               selectedRecord.nextAMCDate
-                            ) === "Missed"
+                            ) ===
+                            "Missed"
                               ? "missed"
                               : getStatus(
                                   selectedRecord.nextAMCDate
-                                ) === "Due Soon"
+                                ) ===
+                                "Due Soon"
                               ? "due-soon"
                               : "upcoming"
                           }`}
                         >
-                          {getStatus(
-                            selectedRecord.nextAMCDate
-                          )}
+                          {
+                            getStatus(
+                              selectedRecord.nextAMCDate
+                            )
+                          }
                         </span>
+
                       </strong>
                     </div>
 
                   </div>
+
                 </div>
 
-                {/* REMARKS */}
                 <div className="details-card">
 
-                  <h2>Remarks</h2>
+                  <h2>
+                    Remarks
+                  </h2>
 
                   <div className="remarks-box">
-                    {selectedRecord.remarks ||
-                      "No remarks added."}
+                    {
+                      selectedRecord.remarks ||
+                      "No remarks added."
+                    }
                   </div>
 
                 </div>
 
-                {/* DOCUMENTS */}
                 <div className="details-card">
 
                   <h2>
@@ -1031,25 +1591,60 @@ function App() {
 
                               <span>
                                 📄{" "}
-                                {getDocumentName(
-                                  document,
-                                  index
-                                )}
+                                {
+                                  getDocumentName(
+                                    document,
+                                    index
+                                  )
+                                }
                               </span>
 
                               {url ? (
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
+
+                                <button
+                                  type="button"
                                   className="view-document-btn"
+                                  onClick={async () => {
+
+                                    if (
+                                      window.electronAPI &&
+                                      typeof window
+                                        .electronAPI
+                                        .openDocument ===
+                                        "function"
+                                    ) {
+                                      const result =
+                                        await window.electronAPI.openDocument(
+                                          document.path
+                                        );
+
+                                      if (
+                                        result
+                                      ) {
+                                        alert(
+                                          result
+                                        );
+                                      }
+
+                                      return;
+                                    }
+
+                                    window.open(
+                                      url,
+                                      "_blank",
+                                      "noopener,noreferrer"
+                                    );
+                                  }}
                                 >
                                   Open
-                                </a>
+                                </button>
+
                               ) : (
+
                                 <span>
                                   File unavailable
                                 </span>
+
                               )}
 
                             </div>
@@ -1070,18 +1665,22 @@ function App() {
                 </div>
 
               </div>
+
             </>
           )}
 
-        {/* =====================
+        {/* =========================
             ALL RECORDS
-        ====================== */}
+        ========================= */}
 
-        {activePage === "records" && (
+        {activePage ===
+          "records" && (
           <>
+
             <div className="header">
 
               <div>
+
                 <h1>
                   All Records
                 </h1>
@@ -1091,6 +1690,7 @@ function App() {
                   projects and AMC
                   records
                 </p>
+
               </div>
 
               <button
@@ -1098,7 +1698,9 @@ function App() {
                 onClick={() => {
                   resetForm();
                   setEditingId(null);
-                  setActivePage("add");
+                  setActivePage(
+                    "add"
+                  );
                 }}
               >
                 + Add New Record
@@ -1107,16 +1709,20 @@ function App() {
             </div>
 
             <div className="search-section">
+
               <input
                 type="text"
                 placeholder="Search by order number..."
-                value={searchTerm}
+                value={
+                  searchTerm
+                }
                 onChange={(e) =>
                   setSearchTerm(
                     e.target.value
                   )
                 }
               />
+
             </div>
 
             <div className="table-container">
@@ -1124,7 +1730,9 @@ function App() {
               <table>
 
                 <thead>
+
                   <tr>
+
                     <th>
                       Project No.
                     </th>
@@ -1156,41 +1764,60 @@ function App() {
                     <th>
                       Actions
                     </th>
+
                   </tr>
+
                 </thead>
 
                 <tbody>
 
                   {filteredRecords.map(
                     (record) => (
+
                       <tr
-                        key={record.id}
+                        key={
+                          record.id
+                        }
                       >
 
                         <td>
-                          {record.projectNumber}
+                          {
+                            record.projectNumber
+                          }
                         </td>
 
                         <td>
-                          {record.companyName}
+                          {
+                            record.companyName
+                          }
                         </td>
 
                         <td>
-                          {record.amcType}
+                          {
+                            record.amcType
+                          }
                         </td>
 
                         <td>
-                          {record.lastAMCDate}
+                          {
+                            record.lastAMCDate ||
+                            "-"
+                          }
                         </td>
 
                         <td>
-                          {record.nextAMCDate}
+                          {
+                            record.nextAMCDate ||
+                            "-"
+                          }
                         </td>
 
                         <td>
-                          {getAMCLeft(
-                            record.amcEndDate
-                          )}
+                          {
+                            getAMCLeft(
+                              record.amcEndDate
+                            )
+                          }
                         </td>
 
                         <td>
@@ -1210,9 +1837,11 @@ function App() {
                                 : "upcoming"
                             }`}
                           >
-                            {getStatus(
-                              record.nextAMCDate
-                            )}
+                            {
+                              getStatus(
+                                record.nextAMCDate
+                              )
+                            }
                           </span>
 
                         </td>
@@ -1255,6 +1884,7 @@ function App() {
                         </td>
 
                       </tr>
+
                     )
                   )}
 
@@ -1263,19 +1893,22 @@ function App() {
               </table>
 
             </div>
+
           </>
         )}
 
-        {/* =====================
+        {/* =========================
             ADD / EDIT
-        ====================== */}
+        ========================= */}
 
-        {activePage === "add" && (
+        {activePage ===
+          "add" && (
           <>
 
             <div className="header">
 
               <div>
+
                 <h1>
                   {editingId
                     ? "Edit Record"
@@ -1286,18 +1919,22 @@ function App() {
                   Add company, project and
                   AMC details
                 </p>
+
               </div>
 
             </div>
 
             <form
               className="record-form"
-              onSubmit={handleSubmit}
+              onSubmit={
+                handleSubmit
+              }
             >
 
               <div className="form-grid">
 
                 <div className="form-group">
+
                   <label>
                     Project Number
                   </label>
@@ -1314,9 +1951,11 @@ function App() {
                     placeholder="PR-001"
                     required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     Company Name
                   </label>
@@ -1333,9 +1972,11 @@ function App() {
                     placeholder="Enter company name"
                     required
                   />
+
                 </div>
 
                 <div className="form-group full-width">
+
                   <label>
                     Company Address
                   </label>
@@ -1351,9 +1992,11 @@ function App() {
                     }
                     placeholder="Enter company address"
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     Contact Person
                   </label>
@@ -1369,9 +2012,11 @@ function App() {
                     }
                     placeholder="Contact person name"
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     Phone Number
                   </label>
@@ -1387,9 +2032,11 @@ function App() {
                     }
                     placeholder="Phone number"
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     AMC Type
                   </label>
@@ -1403,19 +2050,25 @@ function App() {
                       handleChange
                     }
                   >
-                    <option>
+
+                    <option value="Quarterly">
                       Quarterly
                     </option>
-                    <option>
+
+                    <option value="Half Yearly">
                       Half Yearly
                     </option>
-                    <option>
+
+                    <option value="Yearly">
                       Yearly
                     </option>
+
                   </select>
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     AMC Start Date
                   </label>
@@ -1429,10 +2082,13 @@ function App() {
                     onChange={
                       handleChange
                     }
+                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     AMC End Date
                   </label>
@@ -1446,10 +2102,13 @@ function App() {
                     onChange={
                       handleChange
                     }
+                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     Last AMC Date
                   </label>
@@ -1463,10 +2122,13 @@ function App() {
                     onChange={
                       handleChange
                     }
+                    required
                   />
+
                 </div>
 
                 <div className="form-group">
+
                   <label>
                     Next AMC Date
                   </label>
@@ -1477,13 +2139,27 @@ function App() {
                     value={
                       formData.nextAMCDate
                     }
-                    onChange={
-                      handleChange
-                    }
+                    readOnly
                   />
+
+                  <small
+                    style={{
+                      marginTop:
+                        "6px",
+                      color:
+                        "#6b7280",
+                      fontSize:
+                        "12px",
+                    }}
+                  >
+                    Automatically calculated
+                    from AMC Type and Last AMC Date.
+                  </small>
+
                 </div>
 
                 <div className="form-group full-width">
+
                   <label>
                     Remarks
                   </label>
@@ -1499,9 +2175,9 @@ function App() {
                     placeholder="Add remarks..."
                     rows="4"
                   />
+
                 </div>
 
-                {/* DOCUMENT UPLOAD */}
                 <div className="form-group full-width">
 
                   <label>
@@ -1518,6 +2194,7 @@ function App() {
 
                   {selectedFiles.length >
                     0 && (
+
                     <div className="selected-files">
 
                       {selectedFiles.map(
@@ -1525,16 +2202,23 @@ function App() {
                           file,
                           index
                         ) => (
+
                           <div
-                            key={index}
+                            key={
+                              index
+                            }
                           >
                             📄{" "}
-                            {file.name}
+                            {
+                              file.name
+                            }
                           </div>
+
                         )
                       )}
 
                     </div>
+
                   )}
 
                 </div>
@@ -1548,7 +2232,9 @@ function App() {
                   className="cancel-btn"
                   onClick={() => {
                     resetForm();
-                    setEditingId(null);
+                    setEditingId(
+                      null
+                    );
                     setActivePage(
                       "records"
                     );
@@ -1569,19 +2255,22 @@ function App() {
               </div>
 
             </form>
+
           </>
         )}
 
-        {/* =====================
+        {/* =========================
             UPCOMING AMC
-        ====================== */}
+        ========================= */}
 
-        {activePage === "upcoming" && (
+        {activePage ===
+          "upcoming" && (
           <>
 
             <div className="header">
 
               <div>
+
                 <h1>
                   Upcoming AMC
                 </h1>
@@ -1590,6 +2279,7 @@ function App() {
                   View your upcoming AMC
                   records
                 </p>
+
               </div>
 
             </div>
@@ -1599,7 +2289,9 @@ function App() {
               <table>
 
                 <thead>
+
                   <tr>
+
                     <th>
                       Project No.
                     </th>
@@ -1619,7 +2311,9 @@ function App() {
                     <th>
                       Status
                     </th>
+
                   </tr>
+
                 </thead>
 
                 <tbody>
@@ -1634,6 +2328,7 @@ function App() {
                     )
                     .map(
                       (record) => (
+
                         <tr
                           key={
                             record.id
@@ -1660,7 +2355,8 @@ function App() {
 
                           <td>
                             {
-                              record.nextAMCDate
+                              record.nextAMCDate ||
+                              "-"
                             }
                           </td>
 
@@ -1671,6 +2367,7 @@ function App() {
                           </td>
 
                         </tr>
+
                       )
                     )}
 
@@ -1684,6 +2381,7 @@ function App() {
         )}
 
       </main>
+
     </div>
   );
 }

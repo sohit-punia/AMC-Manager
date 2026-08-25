@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 database.db
 /backend/database.db
+
+/release
+/build
