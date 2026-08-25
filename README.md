@@ -1,16 +1,39 @@
-# React + Vite
+# AMC Manager
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AMC Manager is a Windows desktop application for managing AMC (Annual Maintenance Contract) records, company information, AMC schedules, documents, remarks, and upcoming maintenance visits.
 
-Currently, two official plugins are available:
+Built with React, Vite, Electron, Express, and SQLite.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Features
 
-## React Compiler
+- Dashboard for AMC overview
+- Add new AMC records
+- Edit existing records
+- Delete records
+- View complete record details
+- Search records by project/order number
+- Track Running AMC
+- Track Upcoming AMC
+- Track Due Soon AMC
+- Track Missed AMC
+- Automatic Next AMC Date calculation
+- Automatic AMC Left calculation
+- Quarterly AMC support
+- Half Yearly AMC support
+- Yearly AMC support
+- Upload multiple documents
+- Open attached documents with the default Windows application
+- Local SQLite database
+- Local document storage
+- Windows desktop application
+- Windows installer using Electron Builder
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## AMC Calculation
 
-## Expanding the Oxlint configuration
+The application automatically calculates the next AMC visit from the AMC type and the last AMC date.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+### Quarterly
+
+```text
+Last AMC Date: 10-07-2026
+Next AMC Date: 10-10-2026
