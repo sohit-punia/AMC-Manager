@@ -446,3 +446,100 @@ tbody tr:last-child td {
     grid-column: auto;
   }
 }
+
+/* =========================
+   RECORD DETAILS PAGE
+========================= */
+
+.details-container {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.details-card {
+  background-color: white;
+  border: 1px solid #dfe3eb;
+  border-radius: 12px;
+  padding: 25px;
+}
+
+.details-card h2 {
+  font-size: 18px;
+  color: #1f2937;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.detail-item span {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.detail-item strong {
+  font-size: 15px;
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.full-detail {
+  grid-column: 1 / -1;
+}
+
+.remarks-box {
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 15px;
+  color: #374151;
+  line-height: 1.6;
+  min-height: 70px;
+}
+
+.no-documents {
+  padding: 20px;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.view-btn {
+  border: none;
+  padding: 7px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  background-color: #dcfce7;
+  color: #15803d;
+  transition: 0.2s;
+}
+
+.view-btn:hover {
+  background-color: #15803d;
+  color: white;
+}
+
+@media (max-width: 768px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .full-detail {
+    grid-column: auto;
+  }
+}
