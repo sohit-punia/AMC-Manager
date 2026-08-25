@@ -9,6 +9,7 @@ function App() {
   const [selectedRecord, setSelectedRecord] = useState(null);
 
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [formData, setFormData] = useState({
     projectNumber: "",
@@ -118,12 +119,7 @@ function App() {
       );
 
       selectedFiles.forEach((file) => {
-        // IMPORTANT:
-        // Must match upload.array("documents", 10)
-        dataToSend.append(
-          "documents",
-          file
-        );
+        dataToSend.append("documents", file);
       });
 
       const response = await fetch(url, {
@@ -459,8 +455,109 @@ function App() {
   };
 
   /* =========================
-     UI
+     SEARCH
   ========================= */
+
+  const filteredRecords = records.filter(
+    (record) =>
+      record.projectNumber
+        ?.toLowerCase()
+        .includes(
+          searchTerm.toLowerCase()
+        )
+  );
+
+  /* =========================
+     DASHBOARD
+  ========================= */
+
+  const dashboardToday = new Date();
+  dashboardToday.setHours(0, 0, 0, 0);
+
+  const runningAMC = records.filter(
+    (record) => {
+      if (
+        !record.amcStartDate ||
+        !record.amcEndDate
+      ) {
+        return false;
+      }
+
+      const startDate = new Date(
+        record.amcStartDate
+      );
+
+      const endDate = new Date(
+        record.amcEndDate
+      );
+
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
+
+      return (
+        startDate <= dashboardToday &&
+        endDate >= dashboardToday
+      );
+    }
+  );
+
+  const missedAMC = records.filter(
+    (record) => {
+      if (!record.nextAMCDate) {
+        return false;
+      }
+
+      const nextDate = new Date(
+        record.nextAMCDate
+      );
+
+      nextDate.setHours(0, 0, 0, 0);
+
+      return nextDate < dashboardToday;
+    }
+  );
+
+  const upcomingAMC = records.filter(
+    (record) => {
+      if (!record.nextAMCDate) {
+        return false;
+      }
+
+      const nextDate = new Date(
+        record.nextAMCDate
+      );
+
+      nextDate.setHours(0, 0, 0, 0);
+
+      return nextDate >= dashboardToday;
+    }
+  );
+
+  const dashboardTotal =
+    runningAMC.length +
+    missedAMC.length +
+    upcomingAMC.length;
+
+  const runningPercent =
+    dashboardTotal > 0
+      ? (runningAMC.length /
+          dashboardTotal) *
+        100
+      : 0;
+
+  const upcomingPercent =
+    dashboardTotal > 0
+      ? (upcomingAMC.length /
+          dashboardTotal) *
+        100
+      : 0;
+
+  const missedPercent =
+    dashboardTotal > 0
+      ? (missedAMC.length /
+          dashboardTotal) *
+        100
+      : 0;
 
   return (
     <div className="app">
@@ -473,6 +570,23 @@ function App() {
         </div>
 
         <div className="menu">
+
+          {/* =====================
+              DASHBOARD
+          ====================== */}
+
+          <button
+            className={`menu-item ${
+              activePage === "dashboard"
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              setActivePage("dashboard")
+            }
+          >
+            📊 Dashboard
+          </button>
 
           <button
             className={`menu-item ${
@@ -522,6 +636,152 @@ function App() {
       <main className="main-content">
 
         {/* =====================
+            DASHBOARD
+        ====================== */}
+
+        {activePage === "dashboard" && (
+          <>
+            <div className="header">
+              <div>
+                <h1>Dashboard</h1>
+                <p>
+                  Overview of your AMC records
+                </p>
+              </div>
+            </div>
+
+            <div className="dashboard-cards">
+
+              <div className="dashboard-card running-card">
+                <div className="dashboard-card-title">
+                  Running AMC
+                </div>
+
+                <div className="dashboard-card-number">
+                  {runningAMC.length}
+                </div>
+
+                <div className="dashboard-card-text">
+                  Currently active
+                </div>
+              </div>
+
+              <div className="dashboard-card upcoming-card">
+                <div className="dashboard-card-title">
+                  Upcoming AMC
+                </div>
+
+                <div className="dashboard-card-number">
+                  {upcomingAMC.length}
+                </div>
+
+                <div className="dashboard-card-text">
+                  Upcoming visits
+                </div>
+              </div>
+
+              <div className="dashboard-card missed-card">
+                <div className="dashboard-card-title">
+                  Missed AMC
+                </div>
+
+                <div className="dashboard-card-number">
+                  {missedAMC.length}
+                </div>
+
+                <div className="dashboard-card-text">
+                  Needs attention
+                </div>
+              </div>
+
+            </div>
+
+            <div className="dashboard-chart-card">
+              <h2>AMC Overview</h2>
+
+              <div className="chart-row">
+                <div className="chart-label">
+                  <span>Running AMC</span>
+                  <strong>
+                    {runningAMC.length}
+                  </strong>
+                </div>
+
+                <div className="chart-bar">
+                  <div
+                    className="chart-bar-running"
+                    style={{
+                      width: `${runningPercent}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="chart-row">
+                <div className="chart-label">
+                  <span>Upcoming AMC</span>
+                  <strong>
+                    {upcomingAMC.length}
+                  </strong>
+                </div>
+
+                <div className="chart-bar">
+                  <div
+                    className="chart-bar-upcoming"
+                    style={{
+                      width: `${upcomingPercent}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="chart-row">
+                <div className="chart-label">
+                  <span>Missed AMC</span>
+                  <strong>
+                    {missedAMC.length}
+                  </strong>
+                </div>
+
+                <div className="chart-bar">
+                  <div
+                    className="chart-bar-missed"
+                    style={{
+                      width: `${missedPercent}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="dashboard-summary">
+
+              <div>
+                <span>Total Records</span>
+                <strong>
+                  {records.length}
+                </strong>
+              </div>
+
+              <div>
+                <span>Running AMC</span>
+                <strong>
+                  {runningAMC.length}
+                </strong>
+              </div>
+
+              <div>
+                <span>Missed AMC</span>
+                <strong>
+                  {missedAMC.length}
+                </strong>
+              </div>
+
+            </div>
+          </>
+        )}
+
+        {/* =====================
             RECORD DETAILS
         ====================== */}
 
@@ -544,9 +804,7 @@ function App() {
                 <button
                   className="cancel-btn"
                   onClick={() => {
-                    setSelectedRecord(
-                      null
-                    );
+                    setSelectedRecord(null);
                     setActivePage(
                       "records"
                     );
@@ -622,7 +880,6 @@ function App() {
                           "-"}
                       </strong>
                     </div>
-                    
 
                   </div>
                 </div>
@@ -805,8 +1062,7 @@ function App() {
                   ) : (
 
                     <div className="no-documents">
-                      No documents attached
-                      yet.
+                      No documents attached yet.
                     </div>
 
                   )}
@@ -853,7 +1109,13 @@ function App() {
             <div className="search-section">
               <input
                 type="text"
-                placeholder="Search by company, project number..."
+                placeholder="Search by order number..."
+                value={searchTerm}
+                onChange={(e) =>
+                  setSearchTerm(
+                    e.target.value
+                  )
+                }
               />
             </div>
 
@@ -899,7 +1161,7 @@ function App() {
 
                 <tbody>
 
-                  {records.map(
+                  {filteredRecords.map(
                     (record) => (
                       <tr
                         key={record.id}
