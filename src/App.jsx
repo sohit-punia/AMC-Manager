@@ -1,609 +1,431 @@
-
-import { useState, useEffect } from "react";
+import AddVisit from "./AddVisit";
+import VisitDetails from "./VisitDetails";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-function App() {
-  const [activePage, setActivePage] =
-    useState("records");
+const API = "http://localhost:5000/api";
 
-  const [records, setRecords] =
-    useState([]);
 
-  const [editingId, setEditingId] =
-    useState(null);
 
-  const [selectedRecord, setSelectedRecord] =
-    useState(null);
+/* =========================
+   HELPERS
+========================= */
 
-  const [selectedFiles, setSelectedFiles] =
-    useState([]);
+function getMonthsForAMCType(amcType) {
+  if (amcType === "Quarterly") return 3;
+  if (amcType === "Half Yearly") return 6;
+  if (amcType === "Yearly") return 12;
+  return 0;
+}
+function getAMCLeft(endDate) {
+  if (!endDate) {
+    return "-";
+  }
 
-  const [searchTerm, setSearchTerm] =
-    useState("");
+  const today = new Date();
+  const end = new Date(endDate);
 
-  const [formData, setFormData] = useState({
+  today.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+
+  if (end < today) {
+    return "Expired";
+  }
+
+  let years =
+    end.getFullYear() -
+    today.getFullYear();
+
+  let months =
+    end.getMonth() -
+    today.getMonth();
+
+  const days =
+    end.getDate() -
+    today.getDate();
+
+  if (days < 0) {
+    months--;
+  }
+
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  if (
+    years > 0 &&
+    months > 0
+  ) {
+    return `${years} Year ${months} Month`;
+  }
+
+  if (years > 0) {
+    return `${years} Year`;
+  }
+
+  if (months > 0) {
+    return `${months} Month`;
+  }
+
+  const remainingDays =
+    Math.max(
+      0,
+      Math.ceil(
+        (end - today) /
+          (1000 * 60 * 60 * 24)
+      )
+    );
+
+  return `${remainingDays} Days`;
+}
+function addMonthsToDate(dateString, months) {
+  if (!dateString || !months) return "";
+
+  const [year, month, day] = dateString
+    .split("-")
+    .map(Number);
+
+  if (!year || !month || !day) return "";
+
+  const totalMonths =
+    year * 12 + (month - 1) + months;
+
+  const targetYear = Math.floor(
+    totalMonths / 12
+  );
+
+  const targetMonth =
+    totalMonths % 12;
+
+  const lastDay = new Date(
+    targetYear,
+    targetMonth + 1,
+    0
+  ).getDate();
+
+  const targetDay = Math.min(
+    day,
+    lastDay
+  );
+
+  return (
+    `${targetYear}-${String(
+      targetMonth + 1
+    ).padStart(2, "0")}-${String(
+      targetDay
+    ).padStart(2, "0")}`
+  );
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
+}
+
+function getAMCStatus(date) {
+  if (!date) return "Upcoming";
+
+  const today = new Date();
+  const target = new Date(date);
+
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+
+  const days = Math.ceil(
+    (target - today) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (days < 0) return "Missed";
+  if (days <= 7) return "Due Soon";
+  return "Upcoming";
+}
+
+function getStatusClass(status) {
+  if (status === "Missed") return "status missed";
+  if (status === "Due Soon") return "status due-soon";
+  return "status upcoming";
+}
+
+function emptyProject() {
+  return {
     projectNumber: "",
     companyName: "",
     companyAddress: "",
     contactPerson: "",
     phoneNumber: "",
+    totalOrderAmount: "",
+    numberOfStations: "",
+    stationName: "",
     amcType: "Quarterly",
     amcStartDate: "",
     amcEndDate: "",
-    lastAMCDate: "",
-    nextAMCDate: "",
     remarks: "",
-  });
+  };
+}
+
+/* =========================
+   APP
+========================= */
+
+function App() {
+  const [page, setPage] = useState("dashboard");
+
+  const [projects, setProjects] = useState([]);
+  const [employees, setEmployees] = useState([]);
+
+  const [selectedProject, setSelectedProject] = useState(null);
+
+  const [selectedVisit, setSelectedVisit] = useState(null);
+
+  const [projectForm, setProjectForm] =  useState(emptyProject());
+
+  const [editingProjectId, setEditingProjectId] = useState(null);
+
+  const [search, setSearch] = useState("");
+
+  const [loading, setLoading] = useState(false);
+
+  const [error, setError] = useState("");
 
   /* =========================
-     FETCH RECORDS
+     FETCH PROJECTS
   ========================= */
 
-  const fetchRecords = async () => {
+  async function fetchProjects() {
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/records"
-      );
+      setLoading(true);
+      setError("");
 
-      if (!response.ok) {
-        throw new Error(
-          "Failed to fetch records"
-        );
-      }
+      const response = await fetch(
+        `${API}/projects`
+      );
 
       const data = await response.json();
 
-      setRecords(
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Failed to fetch projects"
+        );
+      }
+
+      setProjects(
         Array.isArray(data) ? data : []
       );
-    } catch (error) {
+    } catch (err) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* =========================
+     FETCH EMPLOYEES
+  ========================= */
+
+  async function fetchEmployees() {
+    try {
+      const response = await fetch(
+        `${API}/employees`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) return;
+
+      setEmployees(
+        Array.isArray(data) ? data : []
+      );
+    } catch (err) {
       console.error(
-        "Error fetching records:",
-        error
+        "Employee fetch error:",
+        err
       );
     }
-  };
+  }
 
   useEffect(() => {
-    fetchRecords();
+    fetchProjects();
+    fetchEmployees();
   }, []);
 
   /* =========================
-     CALCULATE NEXT AMC DATE
-
-     Quarterly   = +3 months
-     Half Yearly = +6 months
-     Yearly      = +12 months
+     PROJECT FORM CHANGE
   ========================= */
 
-  const calculateNextAMCDate = (
-    lastAMCDate,
-    amcType,
-    amcEndDate = ""
-  ) => {
-    if (
-      !lastAMCDate ||
-      !amcType
-    ) {
-      return "";
-    }
-
-    const monthsToAdd = {
-      Quarterly: 3,
-      "Half Yearly": 6,
-      Yearly: 12,
-    }[amcType];
-
-    if (!monthsToAdd) {
-      return "";
-    }
-
-    const parts =
-      lastAMCDate.split("-");
-
-    if (parts.length !== 3) {
-      return "";
-    }
-
-    const year = Number(parts[0]);
-    const month = Number(parts[1]);
-    const day = Number(parts[2]);
-
-    if (
-      !Number.isInteger(year) ||
-      !Number.isInteger(month) ||
-      !Number.isInteger(day) ||
-      month < 1 ||
-      month > 12 ||
-      day < 1 ||
-      day > 31
-    ) {
-      return "";
-    }
-
-    /*
-      Convert the date into a month index.
-      This handles month-end dates correctly.
-
-      Example:
-
-      31 Jan + 3 months -> 30 Apr
-      31 Aug + 6 months -> 28/29 Feb
-    */
-
-    const totalMonths =
-      year * 12 +
-      (month - 1) +
-      monthsToAdd;
-
-    const targetYear =
-      Math.floor(totalMonths / 12);
-
-    const targetMonthIndex =
-      totalMonths % 12;
-
-    const daysInTargetMonth =
-      new Date(
-        targetYear,
-        targetMonthIndex + 1,
-        0
-      ).getDate();
-
-    const targetDay = Math.min(
-      day,
-      daysInTargetMonth
-    );
-
-    const nextDate =
-      `${targetYear}-${String(
-        targetMonthIndex + 1
-      ).padStart(2, "0")}-${String(
-        targetDay
-      ).padStart(2, "0")}`;
-
-    /*
-      If the next scheduled visit is
-      beyond the overall AMC contract end,
-      there is no next AMC within this contract.
-    */
-
-    if (
-      amcEndDate &&
-      nextDate > amcEndDate
-    ) {
-      return "";
-    }
-
-    return nextDate;
-  };
-
-  /* =========================
-     FORM CHANGE
-  ========================= */
-
-  const handleChange = (e) => {
+  function handleProjectChange(e) {
     const {
       name,
       value,
     } = e.target;
 
-    setFormData((previous) => {
-      const updated = {
-        ...previous,
-        [name]: value,
-      };
-
-      /*
-        Automatically calculate Next AMC
-        whenever any of these change.
-      */
-
-      if (
-        name === "lastAMCDate" ||
-        name === "amcType" ||
-        name === "amcEndDate"
-      ) {
-        updated.nextAMCDate =
-          calculateNextAMCDate(
-            updated.lastAMCDate,
-            updated.amcType,
-            updated.amcEndDate
-          );
-      }
-
-      return updated;
-    });
-  };
+    setProjectForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  }
 
   /* =========================
-     FILE CHANGE
+     SAVE PROJECT
   ========================= */
 
-  const handleFileChange = (e) => {
-    setSelectedFiles(
-      Array.from(
-        e.target.files || []
-      )
-    );
-  };
-
-  /* =========================
-     RESET FORM
-  ========================= */
-
-  const resetForm = () => {
-    setFormData({
-      projectNumber: "",
-      companyName: "",
-      companyAddress: "",
-      contactPerson: "",
-      phoneNumber: "",
-      amcType: "Quarterly",
-      amcStartDate: "",
-      amcEndDate: "",
-      lastAMCDate: "",
-      nextAMCDate: "",
-      remarks: "",
-    });
-
-    setSelectedFiles([]);
-  };
-
-  /* =========================
-     VALIDATE FORM
-  ========================= */
-
-  const validateForm = () => {
-    if (!formData.projectNumber.trim()) {
-      alert(
-        "Please enter Project Number."
-      );
-      return false;
-    }
-
-    if (!formData.companyName.trim()) {
-      alert(
-        "Please enter Company Name."
-      );
-      return false;
-    }
-
-    if (!formData.amcStartDate) {
-      alert(
-        "Please enter AMC Start Date."
-      );
-      return false;
-    }
-
-    if (!formData.amcEndDate) {
-      alert(
-        "Please enter AMC End Date."
-      );
-      return false;
-    }
-
-    if (!formData.lastAMCDate) {
-      alert(
-        "Please enter Last AMC Date."
-      );
-      return false;
-    }
-
-    if (
-      formData.amcEndDate <
-      formData.amcStartDate
-    ) {
-      alert(
-        "AMC End Date cannot be before AMC Start Date."
-      );
-      return false;
-    }
-
-    if (
-      formData.lastAMCDate <
-      formData.amcStartDate
-    ) {
-      alert(
-        "Last AMC Date cannot be before AMC Start Date."
-      );
-      return false;
-    }
-
-    if (
-      formData.lastAMCDate >
-      formData.amcEndDate
-    ) {
-      alert(
-        "Last AMC Date cannot be after AMC End Date."
-      );
-      return false;
-    }
-
-    return true;
-  };
-
-  /* =========================
-     ADD / UPDATE RECORD
-  ========================= */
-
-  const handleSubmit = async (e) => {
+  async function handleProjectSubmit(e) {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (
+      !projectForm.projectNumber.trim()
+    ) {
+      alert(
+        "Project Number is required."
+      );
+      return;
+    }
+
+    if (
+      !projectForm.companyName.trim()
+    ) {
+      alert(
+        "Company Name is required."
+      );
+      return;
+    }
+
+    if (
+      !projectForm.numberOfStations ||
+      Number(
+        projectForm.numberOfStations
+      ) < 1
+    ) {
+      alert(
+        "Number of Stations must be at least 1."
+      );
       return;
     }
 
     try {
-      const url = editingId
-        ? `http://localhost:5000/api/records/${editingId}`
-        : "http://localhost:5000/api/records";
+      setLoading(true);
 
-      const method = editingId
+      const url = editingProjectId
+        ? `${API}/projects/${editingProjectId}`
+        : `${API}/projects`;
+
+      const method = editingProjectId
         ? "PUT"
         : "POST";
 
-      /*
-        Always calculate the Next AMC Date
-        one final time before sending.
-      */
-
-      const calculatedNextAMCDate =
-        calculateNextAMCDate(
-          formData.lastAMCDate,
-          formData.amcType,
-          formData.amcEndDate
-        );
-
-      const dataToSend =
-        new FormData();
-
-      dataToSend.append(
-        "projectNumber",
-        formData.projectNumber
-      );
-
-      dataToSend.append(
-        "companyName",
-        formData.companyName
-      );
-
-      dataToSend.append(
-        "companyAddress",
-        formData.companyAddress
-      );
-
-      dataToSend.append(
-        "contactPerson",
-        formData.contactPerson
-      );
-
-      dataToSend.append(
-        "phoneNumber",
-        formData.phoneNumber
-      );
-
-      dataToSend.append(
-        "amcType",
-        formData.amcType
-      );
-
-      dataToSend.append(
-        "amcStartDate",
-        formData.amcStartDate
-      );
-
-      dataToSend.append(
-        "amcEndDate",
-        formData.amcEndDate
-      );
-
-      dataToSend.append(
-        "lastAMCDate",
-        formData.lastAMCDate
-      );
-
-      dataToSend.append(
-        "nextAMCDate",
-        calculatedNextAMCDate
-      );
-
-      dataToSend.append(
-        "remarks",
-        formData.remarks
-      );
-
-      selectedFiles.forEach(
-        (file) => {
-          dataToSend.append(
-            "documents",
-            file
-          );
+      const response = await fetch(
+        url,
+        {
+          method,
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            ...projectForm,
+            numberOfStations:
+              Number(
+                projectForm.numberOfStations
+              ),
+          }),
         }
       );
-
-      const response =
-        await fetch(
-          url,
-          {
-            method,
-            body: dataToSend,
-          }
-        );
 
       const data =
         await response.json();
 
       if (!response.ok) {
-        alert(
+        throw new Error(
           data.message ||
-            "Failed to save record"
+            "Failed to save project"
         );
-        return;
       }
 
       alert(
-        editingId
-          ? "Record updated successfully!"
-          : "Record saved successfully!"
+        editingProjectId
+          ? "Project updated successfully."
+          : "Project created successfully."
       );
 
-      resetForm();
-
-      setEditingId(null);
-
-      await fetchRecords();
-
-      setActivePage("records");
-    } catch (error) {
-      console.error(
-        "Error saving record:",
-        error
+      setProjectForm(
+        emptyProject()
       );
 
-      alert(
-        "Something went wrong while saving the record."
-      );
+      setEditingProjectId(null);
+
+      await fetchProjects();
+
+      setPage("projects");
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
   /* =========================
-     AMC STATUS
+     EDIT PROJECT
   ========================= */
 
-  const getStatus = (
-    nextAMCDate
-  ) => {
-    if (!nextAMCDate) {
-      return "Upcoming";
-    }
-
-    const today = new Date(
-      nextAMCDate
-        ? new Date()
-        : new Date()
-    );
-
-    const nextDate = new Date(
-      nextAMCDate
-    );
-
-    today.setHours(
-      0,
-      0,
-      0,
-      0
-    );
-
-    nextDate.setHours(
-      0,
-      0,
-      0,
-      0
-    );
-
-    const difference = Math.ceil(
-      (nextDate - today) /
-        (1000 * 60 * 60 * 24)
-    );
-
-    if (difference < 0) {
-      return "Missed";
-    }
-
-    if (difference <= 7) {
-      return "Due Soon";
-    }
-
-    return "Upcoming";
-  };
-
-  /* =========================
-     EDIT RECORD
-  ========================= */
-
-  const handleEdit = (
-    record
-  ) => {
-    const calculatedNextAMCDate =
-      calculateNextAMCDate(
-        record.lastAMCDate || "",
-        record.amcType ||
-          "Quarterly",
-        record.amcEndDate || ""
-      );
-
-    setFormData({
+  function editProject(project) {
+    setProjectForm({
       projectNumber:
-        record.projectNumber || "",
-
+        project.projectNumber || "",
       companyName:
-        record.companyName || "",
-
+        project.companyName || "",
       companyAddress:
-        record.companyAddress || "",
-
+        project.companyAddress || "",
       contactPerson:
-        record.contactPerson || "",
-
+        project.contactPerson || "",
       phoneNumber:
-        record.phoneNumber || "",
-
+        project.phoneNumber || "",
+      totalOrderAmount:
+        project.totalOrderAmount || "",
+      numberOfStations:
+        project.numberOfStations || "",
+      stationName:
+        project.stationName || "",
       amcType:
-        record.amcType ||
+        project.amcType ||
         "Quarterly",
-
       amcStartDate:
-        record.amcStartDate || "",
-
+        project.amcStartDate || "",
       amcEndDate:
-        record.amcEndDate || "",
-
-      lastAMCDate:
-        record.lastAMCDate || "",
-
-      nextAMCDate:
-        calculatedNextAMCDate,
-
+        project.amcEndDate || "",
       remarks:
-        record.remarks || "",
+        project.remarks || "",
     });
 
-    setSelectedFiles([]);
-    setEditingId(record.id);
-    setActivePage("add");
-  };
+    setEditingProjectId(
+      project.id
+    );
+
+    setPage("add-project");
+  }
 
   /* =========================
-     VIEW DETAILS
+     DELETE PROJECT
   ========================= */
 
-  const handleViewDetails = (
-    record
-  ) => {
-    setSelectedRecord(record);
-    setActivePage("details");
-  };
-
-  /* =========================
-     DELETE RECORD
-  ========================= */
-
-  const handleDelete = async (
-    id
-  ) => {
+  async function deleteProject(id) {
     const confirmed =
       window.confirm(
-        "Are you sure you want to delete this record?"
+        "Delete this project and all related visits, billing, tours and documents?"
       );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       const response =
         await fetch(
-          `http://localhost:5000/api/records/${id}`,
+          `${API}/projects/${id}`,
           {
             method: "DELETE",
           }
@@ -613,1775 +435,1534 @@ function App() {
         await response.json();
 
       if (!response.ok) {
-        alert(
+        throw new Error(
           data.message ||
-            "Failed to delete record"
+            "Failed to delete project"
         );
-        return;
+      }
+
+      await fetchProjects();
+
+      if (
+        selectedProject &&
+        selectedProject.id === id
+      ) {
+        setSelectedProject(null);
       }
 
       alert(
-        "Record deleted successfully!"
+        "Project deleted successfully."
       );
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    }
+  }
 
-      await fetchRecords();
+  /* =========================
+     OPEN PROJECT
+  ========================= */
 
-      setSelectedRecord(null);
-      setActivePage("records");
-    } catch (error) {
-      console.error(
-        "Error deleting record:",
-        error
-      );
+  async function openProject(project) {
+    try {
+      setLoading(true);
+
+      const response =
+        await fetch(
+          `${API}/projects/${project.id}`
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Failed to load project"
+        );
+      }
+
+      setSelectedProject(data);
+      setPage("project-details");
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* =========================
+     CREATE AMC VISIT
+  ========================= */
+
+/* =========================
+   CREATE AMC VISIT
+========================= */
+
+function createVisit(projectId) {
+  const project = projects.find(
+    (item) => item.id === projectId
+  );
+
+  if (!project) return;
+
+  const currentVisits =
+    selectedProject?.visits || [];
+
+  const nextVisitNumber =
+    currentVisits.length + 1;
+
+  let visitDate = "";
+
+  if (currentVisits.length > 0) {
+    const lastVisit =
+      currentVisits[currentVisits.length - 1];
+
+    visitDate = addMonthsToDate(
+      lastVisit.visitDate,
+      getMonthsForAMCType(
+        project.amcType
+      )
+    );
+  } else {
+    visitDate =
+      project.amcStartDate || "";
+  }
+
+  if (
+    project.amcEndDate &&
+    visitDate &&
+    visitDate > project.amcEndDate
+  ) {
+    alert(
+      "No further AMC visit falls within the AMC period."
+    );
+    return;
+  }
+
+  /*
+    Do NOT create the visit here.
+
+    We only open the Add Visit form.
+    The complete visit including employeeName,
+    amount, documents, tour details, etc.
+    will be saved from AddVisit.jsx.
+  */
+
+  setSelectedProject({
+    ...project,
+    visits: currentVisits,
+  });
+
+  setPage("add-visit");
+
+  /*
+    If your AddVisit component accepts
+    these values as props, use:
+
+    nextVisitNumber
+    visitDate
+    project
+  */
+
+  console.log(
+    "Preparing Visit:",
+    nextVisitNumber,
+    visitDate
+  );
+}
+
+  /* =========================
+     UPDATE VISIT
+  ========================= */
+
+  async function updateVisit(
+    visitId,
+    visitDate,
+    remarks
+  ) {
+    try {
+      const response =
+        await fetch(
+          `${API}/visits/${visitId}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              visitDate,
+              remarks,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Failed to update visit"
+        );
+      }
+
+      if (selectedProject) {
+        await openProject(
+          selectedProject
+        );
+      }
+
+      setSelectedVisit(null);
 
       alert(
-        "Something went wrong while deleting."
+        "Visit updated successfully."
       );
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
     }
-  };
+  }
 
   /* =========================
-     AMC LEFT
-     TOTAL CONTRACT TIME LEFT
+     DELETE VISIT
   ========================= */
 
-  const getAMCLeft = (
-    amcEndDate
-  ) => {
-    if (!amcEndDate) {
-      return "End Date Required";
-    }
-
-    const today =
-      new Date();
-
-    const endDate =
-      new Date(amcEndDate);
-
-    today.setHours(
-      0,
-      0,
-      0,
-      0
-    );
-
-    endDate.setHours(
-      0,
-      0,
-      0,
-      0
-    );
-
-    if (endDate < today) {
-      return "Expired";
-    }
-
-    let years =
-      endDate.getFullYear() -
-      today.getFullYear();
-
-    let months =
-      endDate.getMonth() -
-      today.getMonth();
-
-    const days =
-      endDate.getDate() -
-      today.getDate();
-
-    if (days < 0) {
-      months--;
-    }
-
-    if (months < 0) {
-      years--;
-      months += 12;
-    }
-
-    if (
-      years > 0 &&
-      months > 0
-    ) {
-      return `${years} Year ${months} Month`;
-    }
-
-    if (years > 0) {
-      return `${years} Year`;
-    }
-
-    if (months > 0) {
-      return `${months} Month`;
-    }
-
-    const remainingDays =
-      Math.max(
-        0,
-        Math.ceil(
-          (endDate - today) /
-            (1000 * 60 * 60 * 24)
-        )
+  async function deleteVisit(
+    visitId
+  ) {
+    const confirmed =
+      window.confirm(
+        "Delete this AMC visit and all associated data?"
       );
 
-    return `${remainingDays} Days`;
-  };
+    if (!confirmed) return;
 
-  /* =========================
-     DOCUMENTS
-  ========================= */
+    try {
+      const response =
+        await fetch(
+          `${API}/visits/${visitId}`,
+          {
+            method: "DELETE",
+          }
+        );
 
-  const getDocuments = (
-    record
-  ) => {
-    if (!record) {
-      return [];
-    }
+      const data =
+        await response.json();
 
-    let documents =
-      record.document || [];
-
-    if (
-      typeof documents ===
-      "string"
-    ) {
-      try {
-        documents =
-          JSON.parse(
-            documents
-          );
-      } catch {
-        documents =
-          documents
-            ? [
-                {
-                  name: documents
-                    .replace(
-                      /\\/g,
-                      "/"
-                    )
-                    .split("/")
-                    .pop(),
-
-                  path: documents,
-                },
-              ]
-            : [];
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Failed to delete visit"
+        );
       }
+
+      if (selectedProject) {
+        await openProject(
+          selectedProject
+        );
+      }
+
+      setSelectedVisit(null);
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
     }
-
-    if (
-      !Array.isArray(
-        documents
-      )
-    ) {
-      documents = [
-        documents,
-      ];
-    }
-
-    return documents;
-  };
-
-  const getDocumentUrl = (
-    document
-  ) => {
-    if (!document) {
-      return "";
-    }
-
-    let filePath = "";
-
-    if (
-      typeof document ===
-      "string"
-    ) {
-      filePath = document;
-    } else {
-      filePath =
-        document.path ||
-        document.filePath ||
-        document.url ||
-        "";
-    }
-
-    if (!filePath) {
-      return "";
-    }
-
-    if (
-      filePath.startsWith(
-        "http://"
-      ) ||
-      filePath.startsWith(
-        "https://"
-      )
-    ) {
-      return filePath;
-    }
-
-    filePath =
-      filePath.replace(
-        /\\/g,
-        "/"
-      );
-
-    if (
-      filePath.startsWith("/")
-    ) {
-      return `http://localhost:5000${filePath}`;
-    }
-
-    return `http://localhost:5000/${filePath}`;
-  };
-
-  const getDocumentName = (
-    document,
-    index
-  ) => {
-    if (!document) {
-      return `Document ${
-        index + 1
-      }`;
-    }
-
-    if (
-      typeof document ===
-      "string"
-    ) {
-      return document
-        .replace(
-          /\\/g,
-          "/"
-        )
-        .split("/")
-        .pop();
-    }
-
-    return (
-      document.name ||
-      document.originalname ||
-      document.filename ||
-      `Document ${
-        index + 1
-      }`
-    );
-  };
+  }
 
   /* =========================
      SEARCH
   ========================= */
 
-  const filteredRecords =
-    records.filter(
-      (record) =>
-        String(
-          record.projectNumber ||
-            ""
-        )
-          .toLowerCase()
-          .includes(
-            searchTerm.toLowerCase()
+  const filteredProjects =
+    useMemo(() => {
+      const value =
+        search
+          .trim()
+          .toLowerCase();
+
+      if (!value) {
+        return projects;
+      }
+
+      return projects.filter(
+        (project) =>
+          String(
+            project.projectNumber ||
+              ""
           )
-    );
+            .toLowerCase()
+            .includes(value) ||
+          String(
+            project.companyName ||
+              ""
+          )
+            .toLowerCase()
+            .includes(value)
+      );
+    }, [projects, search]);
 
   /* =========================
-     DASHBOARD
+     DASHBOARD DATA
   ========================= */
 
-  const dashboardToday =
-    new Date();
+  const dashboardData =
+    useMemo(() => {
+      let active = 0;
+      let expired = 0;
+      let upcoming = 0;
 
-  dashboardToday.setHours(
-    0,
-    0,
-    0,
-    0
-  );
+      projects.forEach(
+        (project) => {
+          const today =
+            new Date();
 
-  /*
-    RUNNING AMC
+          today.setHours(
+            0,
+            0,
+            0,
+            0
+          );
 
-    The AMC contract itself is
-    currently active.
-  */
+          if (
+            !project.amcEndDate
+          ) {
+            return;
+          }
 
-  const runningAMC =
-    records.filter(
-      (record) => {
-        if (
-          !record.amcStartDate ||
-          !record.amcEndDate
-        ) {
-          return false;
+          const end =
+            new Date(
+              project.amcEndDate
+            );
+
+          end.setHours(
+            0,
+            0,
+            0,
+            0
+          );
+
+          if (end < today) {
+            expired++;
+          } else {
+            active++;
+          }
+
+          if (
+            project.nextAMCDate
+          ) {
+            const status =
+              getAMCStatus(
+                project.nextAMCDate
+              );
+
+            if (
+              status !== "Missed"
+            ) {
+              upcoming++;
+            }
+          }
         }
+      );
 
-        const startDate =
-          new Date(
-            record.amcStartDate
-          );
+      return {
+        total: projects.length,
+        active,
+        expired,
+        upcoming,
+        employees:
+          employees.length,
+      };
+    }, [
+      projects,
+      employees,
+    ]);
 
-        const endDate =
-          new Date(
-            record.amcEndDate
-          );
+  /* =========================
+     RENDER SIDEBAR
+  ========================= */
 
-        startDate.setHours(
-          0,
-          0,
-          0,
-          0
-        );
-
-        endDate.setHours(
-          0,
-          0,
-          0,
-          0
-        );
-
-        return (
-          startDate <=
-            dashboardToday &&
-          endDate >=
-            dashboardToday
-        );
-      }
-    );
-
-  /*
-    VISIT STATUS
-
-    Mutually exclusive:
-      Missed
-      Due Soon
-      Upcoming
-  */
-
-  const missedAMC =
-    records.filter(
-      (record) =>
-        getStatus(
-          record.nextAMCDate
-        ) === "Missed"
-    );
-
-  const dueSoonAMC =
-    records.filter(
-      (record) =>
-        getStatus(
-          record.nextAMCDate
-        ) === "Due Soon"
-    );
-
-  const upcomingAMC =
-    records.filter(
-      (record) =>
-        getStatus(
-          record.nextAMCDate
-        ) === "Upcoming"
-    );
-
-  const visitStatusTotal =
-    missedAMC.length +
-    dueSoonAMC.length +
-    upcomingAMC.length;
-
-  const missedPercent =
-    visitStatusTotal > 0
-      ? (missedAMC.length /
-          visitStatusTotal) *
-        100
-      : 0;
-
-  const dueSoonPercent =
-    visitStatusTotal > 0
-      ? (dueSoonAMC.length /
-          visitStatusTotal) *
-        100
-      : 0;
-
-  const upcomingPercent =
-    visitStatusTotal > 0
-      ? (upcomingAMC.length /
-          visitStatusTotal) *
-        100
-      : 0;
-
-  return (
-    <div className="app">
-
-      {/* =========================
-          SIDEBAR
-      ========================= */}
-
+  function renderSidebar() {
+    return (
       <aside className="sidebar">
 
         <div className="logo">
-          <h2>AMC Manager</h2>
+          <h2>
+            AMC Manager
+          </h2>
+
           <p>
             Record Management
           </p>
         </div>
 
-        <div className="menu">
+        <nav className="menu">
 
           <button
-            className={`menu-item ${
-              activePage ===
-              "dashboard"
-                ? "active"
-                : ""
-            }`}
+            className={
+              page === "dashboard"
+                ? "menu-item active"
+                : "menu-item"
+            }
             onClick={() =>
-              setActivePage(
-                "dashboard"
-              )
+              setPage("dashboard")
             }
           >
             📊 Dashboard
           </button>
 
           <button
-            className={`menu-item ${
-              activePage ===
-              "records"
-                ? "active"
-                : ""
-            }`}
+            className={
+              page === "projects" ||
+              page ===
+                "project-details"
+                ? "menu-item active"
+                : "menu-item"
+            }
             onClick={() =>
-              setActivePage(
-                "records"
-              )
+              setPage("projects")
             }
           >
-            📋 All Records
+            📁 Projects
           </button>
 
           <button
-            className={`menu-item ${
-              activePage === "add"
-                ? "active"
-                : ""
-            }`}
+            className={
+              page === "add-project"
+                ? "menu-item active"
+                : "menu-item"
+            }
             onClick={() => {
-              resetForm();
-              setEditingId(null);
-              setActivePage(
-                "add"
+              setProjectForm(
+                emptyProject()
+              );
+              setEditingProjectId(
+                null
+              );
+              setPage(
+                "add-project"
               );
             }}
           >
-            ➕ Add Record
+            ➕ Add Project
           </button>
 
           <button
-            className={`menu-item ${
-              activePage ===
-              "upcoming"
-                ? "active"
-                : ""
-            }`}
+            className={
+              page === "add-visit"
+                ? "menu-item active"
+                : "menu-item"
+            }
             onClick={() =>
-              setActivePage(
-                "upcoming"
-              )
+              setPage("add-visit")
             }
           >
-            📅 Upcoming AMC
+            📝 Add Visit Details
+          </button>
+
+          <button
+            className={
+              page === "visit-details"
+                ? "menu-item active"
+                : "menu-item"
+            }
+            onClick={() =>
+              setPage("visit-details")
+            }
+          >
+            📋 Visit Details
+          </button>
+
+        </nav>
+      </aside>
+    );
+  }
+
+  /* =========================
+     DASHBOARD PAGE
+  ========================= */
+
+  function renderDashboard() {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1>
+              Dashboard
+            </h1>
+
+            <p>
+              Overview of your AMC management system
+            </p>
+          </div>
+        </div>
+
+        <div className="stat-grid">
+
+          <div className="stat-card">
+            <span>
+              Total Projects
+            </span>
+
+            <strong>
+              {dashboardData.total}
+            </strong>
+          </div>
+
+          <div className="stat-card green">
+            <span>
+              Active AMC
+            </span>
+
+            <strong>
+              {dashboardData.active}
+            </strong>
+          </div>
+
+          <div className="stat-card blue">
+            <span>
+              Upcoming AMC
+            </span>
+
+            <strong>
+              {dashboardData.upcoming}
+            </strong>
+          </div>
+
+          <div className="stat-card red">
+            <span>
+              Expired AMC
+            </span>
+
+            <strong>
+              {dashboardData.expired}
+            </strong>
+          </div>
+
+        </div>
+
+        <div className="dashboard-panel">
+
+          <h2>
+            Project Overview
+          </h2>
+
+          <div className="overview-list">
+
+            <div>
+              <span>
+                Total Projects
+              </span>
+
+              <strong>
+                {
+                  dashboardData.total
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Active AMC
+              </span>
+
+              <strong>
+                {
+                  dashboardData.active
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Expired AMC
+              </span>
+
+              <strong>
+                {
+                  dashboardData.expired
+                }
+              </strong>
+            </div>
+
+            <div>
+              <span>
+                Employees
+              </span>
+
+              <strong>
+                {
+                  dashboardData.employees
+                }
+              </strong>
+            </div>
+
+          </div>
+
+        </div>
+      </>
+    );
+  }
+
+  /* =========================
+     PROJECTS PAGE
+  ========================= */
+
+  function renderProjects() {
+    return (
+      <>
+        <div className="page-header">
+
+          <div>
+            <h1>
+              All Projects
+            </h1>
+
+            <p>
+              Manage your AMC projects
+            </p>
+          </div>
+
+          <button
+            className="primary-btn"
+            onClick={() => {
+              setProjectForm(
+                emptyProject()
+              );
+
+              setEditingProjectId(
+                null
+              );
+
+              setPage(
+                "add-project"
+              );
+            }}
+          >
+            + Add Project
           </button>
 
         </div>
 
-      </aside>
+        <div className="search-box">
+          <input
+            type="text"
+            placeholder="Search by project number or company..."
+            value={search}
+            onChange={(e) =>
+              setSearch(
+                e.target.value
+              )
+            }
+          />
+        </div>
 
-      {/* =========================
-          MAIN CONTENT
-      ========================= */}
+        <div className="table-card">
+
+  <table>
+
+    <thead>
+      <tr>
+        <th>Project No.</th>
+        <th>Company</th>
+        <th>Total Amount</th>
+        <th>AMC Type</th>
+        <th>Last AMC</th>
+        <th>Next AMC</th>
+        <th>AMC Left</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+
+    <tbody>
+
+      {filteredProjects.length === 0 ? (
+
+        <tr>
+          <td
+            colSpan="9"
+            className="empty-cell"
+          >
+            No projects found.
+          </td>
+        </tr>
+
+      ) : (
+
+        filteredProjects.map(
+          (project) => {
+
+            const status =
+              getAMCStatus(
+                project.nextAMCDate
+              );
+
+            return (
+              <tr
+                key={project.id}
+              >
+
+                <td>
+                  {project.projectNumber}
+                </td>
+
+                <td>
+                  {project.companyName}
+                </td>
+
+                <td>
+                  {formatMoney(
+                    project.totalOrderAmount
+                  )}
+                </td>
+
+                <td>
+                  {project.amcType}
+                </td>
+
+                <td>
+                  {project.lastAMCDate || "-"}
+                </td>
+
+                <td>
+                  {project.nextAMCDate || "-"}
+                </td>
+
+                <td>
+                  {getAMCLeft(
+                    project.amcEndDate
+                  )}
+                </td>
+
+                {/* STATUS */}
+
+                <td>
+                  <span
+                    className={`status ${
+                      status === "Missed"
+                        ? "missed"
+                        : status === "Due Soon"
+                        ? "due-soon"
+                        : "upcoming"
+                    }`}
+                  >
+                    {status}
+                  </span>
+                </td>
+
+                {/* ACTIONS */}
+
+                <td className="actions">
+
+                  <button
+                    className="small-btn view"
+                    onClick={() =>
+                      openProject(
+                        project
+                      )
+                    }
+                  >
+                    View
+                  </button>
+
+                  <button
+                    className="small-btn edit"
+                    onClick={() =>
+                      editProject(
+                        project
+                      )
+                    }
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    className="small-btn delete"
+                    onClick={() =>
+                      deleteProject(
+                        project.id
+                      )
+                    }
+                  >
+                    Delete
+                  </button>
+
+                </td>
+
+              </tr>
+            );
+          }
+        )
+      )}
+
+    </tbody>
+
+  </table>
+
+</div>
+      </>
+    );
+  }
+
+  /* =========================
+     ADD PROJECT PAGE
+  ========================= */
+
+  function renderAddProject() {
+    return (
+      <>
+        <div className="page-header">
+
+          <div>
+            <h1>
+              {editingProjectId
+                ? "Edit Project"
+                : "Add New Project"}
+            </h1>
+
+            <p>
+              Enter project and AMC information
+            </p>
+          </div>
+
+        </div>
+
+        <form
+          className="form-card"
+          onSubmit={
+            handleProjectSubmit
+          }
+        >
+
+          <div className="form-grid">
+
+            <div className="field">
+              <label>
+                Project Number *
+              </label>
+
+              <input
+                name="projectNumber"
+                value={
+                  projectForm.projectNumber
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="PR-001"
+                required
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                Company Name *
+              </label>
+
+              <input
+                name="companyName"
+                value={
+                  projectForm.companyName
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="Company name"
+                required
+              />
+            </div>
+
+            <div className="field full">
+              <label>
+                Company Address
+              </label>
+
+              <input
+                name="companyAddress"
+                value={
+                  projectForm.companyAddress
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="Company address"
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                Contact Person
+              </label>
+
+              <input
+                name="contactPerson"
+                value={
+                  projectForm.contactPerson
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="Contact person"
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                Phone Number
+              </label>
+
+              <input
+                name="phoneNumber"
+                value={
+                  projectForm.phoneNumber
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="Phone number"
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                Total Order Amount
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                name="totalOrderAmount"
+                value={
+                  projectForm.totalOrderAmount
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="0"
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                Number of Stations *
+              </label>
+
+              <input
+                type="number"
+                min="1"
+                name="numberOfStations"
+                value={
+                  projectForm.numberOfStations
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="4"
+                required
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                Name of Station
+              </label>
+
+              <input
+                name="stationName"
+                value={
+                  projectForm.stationName
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="Station name"
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                AMC Type *
+              </label>
+
+              <select
+                name="amcType"
+                value={
+                  projectForm.amcType
+                }
+                onChange={
+                  handleProjectChange
+                }
+              >
+                <option>
+                  Quarterly
+                </option>
+
+                <option>
+                  Half Yearly
+                </option>
+
+                <option>
+                  Yearly
+                </option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>
+                AMC Start Date
+              </label>
+
+              <input
+                type="date"
+                name="amcStartDate"
+                value={
+                  projectForm.amcStartDate
+                }
+                onChange={
+                  handleProjectChange
+                }
+              />
+            </div>
+
+            <div className="field">
+              <label>
+                AMC End Date
+              </label>
+
+              <input
+                type="date"
+                name="amcEndDate"
+                value={
+                  projectForm.amcEndDate
+                }
+                onChange={
+                  handleProjectChange
+                }
+              />
+            </div>
+
+            <div className="field full">
+              <label>
+                Remarks
+              </label>
+
+              <textarea
+                name="remarks"
+                value={
+                  projectForm.remarks
+                }
+                onChange={
+                  handleProjectChange
+                }
+                placeholder="Remarks"
+                rows="4"
+              />
+            </div>
+
+          </div>
+
+          <div className="form-actions">
+
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={() => {
+                setProjectForm(
+                  emptyProject()
+                );
+
+                setEditingProjectId(
+                  null
+                );
+
+                setPage(
+                  "projects"
+                );
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              className="primary-btn"
+              disabled={loading}
+            >
+              {editingProjectId
+                ? "Update Project"
+                : "Save Project"}
+            </button>
+
+          </div>
+
+        </form>
+      </>
+    );
+  }
+
+  /* =========================
+     PROJECT DETAILS PAGE
+  ========================= */
+
+  function renderProjectDetails() {
+    if (!selectedProject) {
+      return null;
+    }
+
+    const visits =
+      selectedProject.visits || [];
+
+    return (
+      <>
+        <div className="page-header">
+
+          <div>
+            <h1>
+              Project Details
+            </h1>
+
+            <p>
+              {
+                selectedProject.companyName
+              }
+            </p>
+          </div>
+
+          <div className="header-actions">
+
+            <button
+              className="secondary-btn"
+              onClick={() =>
+                setPage(
+                  "projects"
+                )
+              }
+            >
+              ← Back
+            </button>
+
+            <button
+              className="primary-btn"
+              onClick={() => {
+                setPage("add-visit");
+                setSelectedVisit(null);
+              }}
+            >
+              + Add AMC Visit
+            </button>
+
+          </div>
+
+        </div>
+        <div className="project-finance-grid">
+
+          <div className="project-finance-card">
+            <span>
+              Total Order Amount
+            </span>
+
+            <strong>
+              {formatMoney(
+                selectedProject.totalOrderAmount
+              )}
+            </strong>
+          </div>
+
+          <div className="project-finance-card">
+            <span>
+              AMC Visits Done
+            </span>
+
+            <strong>
+              {selectedProject.visitCount || 0}
+            </strong>
+          </div>
+
+          <div className="project-finance-card received">
+            <span>
+              Received Amount
+            </span>
+
+            <strong>
+              {formatMoney(
+                selectedProject.receivedAmount
+              )}
+            </strong>
+          </div>
+
+          
+
+        </div>
+
+        <div className="details-grid-large">
+
+          <div className="details-card">
+            <h2>
+              Project Information
+            </h2>
+
+            <div className="detail-grid">
+
+              <div>
+                <span>
+                  Project Number
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.projectNumber
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Company Name
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.companyName
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Company Address
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.companyAddress ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Contact Person
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.contactPerson ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Phone Number
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.phoneNumber ||
+                    "-"
+                  }
+                </strong>
+              </div>
+              <div>
+                <span>
+                  Total Order Amount
+                </span>
+
+                <strong>
+                  {formatMoney(
+                    selectedProject.totalOrderAmount
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Number of Stations
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.numberOfStations
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  Station Name
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.stationName ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  AMC Type
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.amcType
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  AMC Start
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.amcStartDate ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
+                  AMC End
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.amcEndDate ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+            </div>
+
+            <div className="remarks-display">
+              <span>
+                Remarks
+              </span>
+
+              <p>
+                {
+                  selectedProject.remarks ||
+                  "No remarks added."
+                }
+              </p>
+            </div>
+
+          </div>
+
+        </div>
+
+        <div className="details-card visits-card">
+
+          <div className="section-header">
+
+            <div>
+              <h2>
+                AMC Visits
+              </h2>
+
+              <p>
+                Visits for this AMC contract
+              </p>
+            </div>
+
+            <button
+              className="primary-btn"
+              onClick={() => {
+                setPage("add-visit");
+                setSelectedVisit(null);
+              }}
+            >
+              + Add Visit
+            </button>
+
+          </div>
+
+          {visits.length ===
+          0 ? (
+            <div className="empty-state">
+              No AMC visits created yet.
+            </div>
+          ) : (
+            <div className="visit-list">
+
+              {visits.map(
+                (visit) => {
+                  const status =
+                    visit.visitDate
+                      ? "Completed"
+                      : "Upcoming";
+
+                  return (
+                    <div
+                      className="visit-row"
+                      key={
+                        visit.id
+                      }
+                    >
+
+                      <div className="visit-number">
+                        <span>
+                          Visit
+                        </span>
+
+                        <strong>
+                          {
+                            visit.visitNumber
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Visit Date
+                        </span>
+
+                        <strong>
+                          {
+                            visit.visitDate ||
+                            "-"
+                          }
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Status
+                        </span>
+
+                        <strong
+                          className={
+                            status ===
+                            "Completed"
+                              ? "status completed"
+                              : "status upcoming"
+                          }
+                        >
+                          {status}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>Employee Name</span>
+
+                        <strong>
+                          {visit.employeeName || "-"}
+                        </strong>
+                      </div>
+
+                      <div className="visit-actions">
+
+                        <button
+                          className="small-btn view"
+                          onClick={() => {
+                            setSelectedVisit(visit);
+                            setPage("visit-details");
+                          }}
+                        >
+                          View
+                        </button>
+
+                        <button
+                          className="small-btn delete"
+                          onClick={() =>
+                            deleteVisit(
+                              visit.id
+                            )
+                          }
+                        >
+                          Delete
+                        </button>
+
+                      </div>
+
+                    </div>
+                  );
+                }
+              )}
+
+            </div>
+          )}
+
+        </div>
+
+
+      </>
+    );
+  }
+
+  /* =========================
+     MAIN PAGE
+  ========================= */
+
+  return (
+    <div className="app">
+
+      {renderSidebar()}
 
       <main className="main-content">
 
-        {/* =========================
-            DASHBOARD
-        ========================= */}
-
-        {activePage ===
-          "dashboard" && (
-          <>
-
-            <div className="header">
-              <div>
-                <h1>
-                  Dashboard
-                </h1>
-
-                <p>
-                  Overview of your AMC records
-                </p>
-              </div>
-            </div>
-
-            <div className="dashboard-cards">
-
-              <div className="dashboard-card running-card">
-                <div className="dashboard-card-title">
-                  Running AMC
-                </div>
-
-                <div className="dashboard-card-number">
-                  {
-                    runningAMC.length
-                  }
-                </div>
-
-                <div className="dashboard-card-text">
-                  Currently active contracts
-                </div>
-              </div>
-
-              <div className="dashboard-card upcoming-card">
-                <div className="dashboard-card-title">
-                  Upcoming AMC
-                </div>
-
-                <div className="dashboard-card-number">
-                  {
-                    upcomingAMC.length
-                  }
-                </div>
-
-                <div className="dashboard-card-text">
-                  More than 7 days away
-                </div>
-              </div>
-
-              <div className="dashboard-card missed-card">
-                <div className="dashboard-card-title">
-                  Missed AMC
-                </div>
-
-                <div className="dashboard-card-number">
-                  {
-                    missedAMC.length
-                  }
-                </div>
-
-                <div className="dashboard-card-text">
-                  Needs attention
-                </div>
-              </div>
-
-            </div>
-
-            <div className="dashboard-chart-card">
-
-              <h2>
-                AMC Visit Overview
-              </h2>
-
-              <div className="chart-row">
-
-                <div className="chart-label">
-                  <span>
-                    Upcoming AMC
-                  </span>
-
-                  <strong>
-                    {
-                      upcomingAMC.length
-                    }
-                  </strong>
-                </div>
-
-                <div className="chart-bar">
-
-                  <div
-                    className="chart-bar-upcoming"
-                    style={{
-                      width: `${upcomingPercent}%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-              <div className="chart-row">
-
-                <div className="chart-label">
-                  <span>
-                    Due Soon
-                  </span>
-
-                  <strong>
-                    {
-                      dueSoonAMC.length
-                    }
-                  </strong>
-                </div>
-
-                <div className="chart-bar">
-
-                  <div
-                    className="chart-bar-running"
-                    style={{
-                      width: `${dueSoonPercent}%`,
-                      backgroundColor:
-                        "#f97316",
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-              <div className="chart-row">
-
-                <div className="chart-label">
-                  <span>
-                    Missed AMC
-                  </span>
-
-                  <strong>
-                    {
-                      missedAMC.length
-                    }
-                  </strong>
-                </div>
-
-                <div className="chart-bar">
-
-                  <div
-                    className="chart-bar-missed"
-                    style={{
-                      width: `${missedPercent}%`,
-                    }}
-                  />
-
-                </div>
-
-              </div>
-
-            </div>
-
-            <div className="dashboard-summary">
-
-              <div>
-                <span>
-                  Total Records
-                </span>
-
-                <strong>
-                  {records.length}
-                </strong>
-              </div>
-
-              <div>
-                <span>
-                  Running AMC
-                </span>
-
-                <strong>
-                  {
-                    runningAMC.length
-                  }
-                </strong>
-              </div>
-
-              <div>
-                <span>
-                  Due Soon
-                </span>
-
-                <strong>
-                  {
-                    dueSoonAMC.length
-                  }
-                </strong>
-              </div>
-
-            </div>
-
-          </>
+        {error && (
+          <div className="error-banner">
+            {error}
+          </div>
         )}
 
-        {/* =========================
-            RECORD DETAILS
-        ========================= */}
-
-        {activePage ===
-          "details" &&
-          selectedRecord && (
-            <>
-
-              <div className="header">
-
-                <div>
-                  <h1>
-                    Record Details
-                  </h1>
-
-                  <p>
-                    Complete company and
-                    AMC information
-                  </p>
-                </div>
-
-                <button
-                  className="cancel-btn"
-                  onClick={() => {
-                    setSelectedRecord(
-                      null
-                    );
-
-                    setActivePage(
-                      "records"
-                    );
-                  }}
-                >
-                  ← Back to Records
-                </button>
-
-              </div>
-
-              <div className="details-container">
-
-                <div className="details-card">
-
-                  <h2>
-                    Company Details
-                  </h2>
-
-                  <div className="details-grid">
-
-                    <div className="detail-item">
-                      <span>
-                        Project Number
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.projectNumber ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        Company Name
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.companyName ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item full-detail">
-                      <span>
-                        Company Address
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.companyAddress ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        Contact Person
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.contactPerson ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        Phone Number
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.phoneNumber ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                  </div>
-
-                </div>
-
-                <div className="details-card">
-
-                  <h2>
-                    AMC Details
-                  </h2>
-
-                  <div className="details-grid">
-
-                    <div className="detail-item">
-                      <span>
-                        AMC Type
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.amcType ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        AMC Left
-                      </span>
-
-                      <strong>
-                        {
-                          getAMCLeft(
-                            selectedRecord.amcEndDate
-                          )
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        AMC Start Date
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.amcStartDate ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        AMC End Date
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.amcEndDate ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        Last AMC Date
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.lastAMCDate ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        Next AMC Date
-                      </span>
-
-                      <strong>
-                        {
-                          selectedRecord.nextAMCDate ||
-                          "-"
-                        }
-                      </strong>
-                    </div>
-
-                    <div className="detail-item">
-                      <span>
-                        Status
-                      </span>
-
-                      <strong>
-
-                        <span
-                          className={`status ${
-                            getStatus(
-                              selectedRecord.nextAMCDate
-                            ) ===
-                            "Missed"
-                              ? "missed"
-                              : getStatus(
-                                  selectedRecord.nextAMCDate
-                                ) ===
-                                "Due Soon"
-                              ? "due-soon"
-                              : "upcoming"
-                          }`}
-                        >
-                          {
-                            getStatus(
-                              selectedRecord.nextAMCDate
-                            )
-                          }
-                        </span>
-
-                      </strong>
-                    </div>
-
-                  </div>
-
-                </div>
-
-                <div className="details-card">
-
-                  <h2>
-                    Remarks
-                  </h2>
-
-                  <div className="remarks-box">
-                    {
-                      selectedRecord.remarks ||
-                      "No remarks added."
-                    }
-                  </div>
-
-                </div>
-
-                <div className="details-card">
-
-                  <h2>
-                    Attached Documents
-                  </h2>
-
-                  {getDocuments(
-                    selectedRecord
-                  ).length > 0 ? (
-
-                    <div className="documents-list">
-
-                      {getDocuments(
-                        selectedRecord
-                      ).map(
-                        (
-                          document,
-                          index
-                        ) => {
-
-                          const url =
-                            getDocumentUrl(
-                              document
-                            );
-
-                          return (
-                            <div
-                              className="document-item"
-                              key={index}
-                            >
-
-                              <span>
-                                📄{" "}
-                                {
-                                  getDocumentName(
-                                    document,
-                                    index
-                                  )
-                                }
-                              </span>
-
-                              {url ? (
-
-                                <button
-                                  type="button"
-                                  className="view-document-btn"
-                                  onClick={async () => {
-
-                                    if (
-                                      window.electronAPI &&
-                                      typeof window
-                                        .electronAPI
-                                        .openDocument ===
-                                        "function"
-                                    ) {
-                                      const result =
-                                        await window.electronAPI.openDocument(
-                                          document.path
-                                        );
-
-                                      if (
-                                        result
-                                      ) {
-                                        alert(
-                                          result
-                                        );
-                                      }
-
-                                      return;
-                                    }
-
-                                    window.open(
-                                      url,
-                                      "_blank",
-                                      "noopener,noreferrer"
-                                    );
-                                  }}
-                                >
-                                  Open
-                                </button>
-
-                              ) : (
-
-                                <span>
-                                  File unavailable
-                                </span>
-
-                              )}
-
-                            </div>
-                          );
-                        }
-                      )}
-
-                    </div>
-
-                  ) : (
-
-                    <div className="no-documents">
-                      No documents attached yet.
-                    </div>
-
-                  )}
-
-                </div>
-
-              </div>
-
-            </>
-          )}
-
-        {/* =========================
-            ALL RECORDS
-        ========================= */}
-
-        {activePage ===
-          "records" && (
-          <>
-
-            <div className="header">
-
-              <div>
-
-                <h1>
-                  All Records
-                </h1>
-
-                <p>
-                  Manage your company
-                  projects and AMC
-                  records
-                </p>
-
-              </div>
-
-              <button
-                className="add-button"
-                onClick={() => {
-                  resetForm();
-                  setEditingId(null);
-                  setActivePage(
-                    "add"
-                  );
-                }}
-              >
-                + Add New Record
-              </button>
-
-            </div>
-
-            <div className="search-section">
-
-              <input
-                type="text"
-                placeholder="Search by order number..."
-                value={
-                  searchTerm
-                }
-                onChange={(e) =>
-                  setSearchTerm(
-                    e.target.value
-                  )
-                }
-              />
-
-            </div>
-
-            <div className="table-container">
-
-              <table>
-
-                <thead>
-
-                  <tr>
-
-                    <th>
-                      Project No.
-                    </th>
-
-                    <th>
-                      Company Name
-                    </th>
-
-                    <th>
-                      AMC Type
-                    </th>
-
-                    <th>
-                      Last AMC
-                    </th>
-
-                    <th>
-                      Next AMC
-                    </th>
-
-                    <th>
-                      AMC Left
-                    </th>
-
-                    <th>
-                      Status
-                    </th>
-
-                    <th>
-                      Actions
-                    </th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {filteredRecords.map(
-                    (record) => (
-
-                      <tr
-                        key={
-                          record.id
-                        }
-                      >
-
-                        <td>
-                          {
-                            record.projectNumber
-                          }
-                        </td>
-
-                        <td>
-                          {
-                            record.companyName
-                          }
-                        </td>
-
-                        <td>
-                          {
-                            record.amcType
-                          }
-                        </td>
-
-                        <td>
-                          {
-                            record.lastAMCDate ||
-                            "-"
-                          }
-                        </td>
-
-                        <td>
-                          {
-                            record.nextAMCDate ||
-                            "-"
-                          }
-                        </td>
-
-                        <td>
-                          {
-                            getAMCLeft(
-                              record.amcEndDate
-                            )
-                          }
-                        </td>
-
-                        <td>
-
-                          <span
-                            className={`status ${
-                              getStatus(
-                                record.nextAMCDate
-                              ) ===
-                              "Missed"
-                                ? "missed"
-                                : getStatus(
-                                    record.nextAMCDate
-                                  ) ===
-                                  "Due Soon"
-                                ? "due-soon"
-                                : "upcoming"
-                            }`}
-                          >
-                            {
-                              getStatus(
-                                record.nextAMCDate
-                              )
-                            }
-                          </span>
-
-                        </td>
-
-                        <td className="actions">
-
-                          <button
-                            className="edit-btn"
-                            onClick={() =>
-                              handleEdit(
-                                record
-                              )
-                            }
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            className="delete-btn"
-                            onClick={() =>
-                              handleDelete(
-                                record.id
-                              )
-                            }
-                          >
-                            Delete
-                          </button>
-
-                          <button
-                            className="view-btn"
-                            onClick={() =>
-                              handleViewDetails(
-                                record
-                              )
-                            }
-                          >
-                            View
-                          </button>
-
-                        </td>
-
-                      </tr>
-
-                    )
-                  )}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          </>
+        {loading && (
+          <div className="loading-banner">
+            Loading...
+          </div>
         )}
 
-        {/* =========================
-            ADD / EDIT
-        ========================= */}
-
-        {activePage ===
-          "add" && (
-          <>
-
-            <div className="header">
-
-              <div>
-
-                <h1>
-                  {editingId
-                    ? "Edit Record"
-                    : "Add New Record"}
-                </h1>
-
-                <p>
-                  Add company, project and
-                  AMC details
-                </p>
-
-              </div>
-
-            </div>
-
-            <form
-              className="record-form"
-              onSubmit={
-                handleSubmit
-              }
-            >
-
-              <div className="form-grid">
-
-                <div className="form-group">
-
-                  <label>
-                    Project Number
-                  </label>
-
-                  <input
-                    type="text"
-                    name="projectNumber"
-                    value={
-                      formData.projectNumber
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="PR-001"
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Company Name
-                  </label>
-
-                  <input
-                    type="text"
-                    name="companyName"
-                    value={
-                      formData.companyName
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="Enter company name"
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group full-width">
-
-                  <label>
-                    Company Address
-                  </label>
-
-                  <input
-                    type="text"
-                    name="companyAddress"
-                    value={
-                      formData.companyAddress
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="Enter company address"
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Contact Person
-                  </label>
-
-                  <input
-                    type="text"
-                    name="contactPerson"
-                    value={
-                      formData.contactPerson
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="Contact person name"
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Phone Number
-                  </label>
-
-                  <input
-                    type="text"
-                    name="phoneNumber"
-                    value={
-                      formData.phoneNumber
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="Phone number"
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    AMC Type
-                  </label>
-
-                  <select
-                    name="amcType"
-                    value={
-                      formData.amcType
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  >
-
-                    <option value="Quarterly">
-                      Quarterly
-                    </option>
-
-                    <option value="Half Yearly">
-                      Half Yearly
-                    </option>
-
-                    <option value="Yearly">
-                      Yearly
-                    </option>
-
-                  </select>
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    AMC Start Date
-                  </label>
-
-                  <input
-                    type="date"
-                    name="amcStartDate"
-                    value={
-                      formData.amcStartDate
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    AMC End Date
-                  </label>
-
-                  <input
-                    type="date"
-                    name="amcEndDate"
-                    value={
-                      formData.amcEndDate
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Last AMC Date
-                  </label>
-
-                  <input
-                    type="date"
-                    name="lastAMCDate"
-                    value={
-                      formData.lastAMCDate
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Next AMC Date
-                  </label>
-
-                  <input
-                    type="date"
-                    name="nextAMCDate"
-                    value={
-                      formData.nextAMCDate
-                    }
-                    readOnly
-                  />
-
-                  <small
-                    style={{
-                      marginTop:
-                        "6px",
-                      color:
-                        "#6b7280",
-                      fontSize:
-                        "12px",
-                    }}
-                  >
-                    Automatically calculated
-                    from AMC Type and Last AMC Date.
-                  </small>
-
-                </div>
-
-                <div className="form-group full-width">
-
-                  <label>
-                    Remarks
-                  </label>
-
-                  <textarea
-                    name="remarks"
-                    value={
-                      formData.remarks
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="Add remarks..."
-                    rows="4"
-                  />
-
-                </div>
-
-                <div className="form-group full-width">
-
-                  <label>
-                    Attach Documents
-                  </label>
-
-                  <input
-                    type="file"
-                    multiple
-                    onChange={
-                      handleFileChange
-                    }
-                  />
-
-                  {selectedFiles.length >
-                    0 && (
-
-                    <div className="selected-files">
-
-                      {selectedFiles.map(
-                        (
-                          file,
-                          index
-                        ) => (
-
-                          <div
-                            key={
-                              index
-                            }
-                          >
-                            📄{" "}
-                            {
-                              file.name
-                            }
-                          </div>
-
-                        )
-                      )}
-
-                    </div>
-
-                  )}
-
-                </div>
-
-              </div>
-
-              <div className="form-actions">
-
-                <button
-                  type="button"
-                  className="cancel-btn"
-                  onClick={() => {
-                    resetForm();
-                    setEditingId(
-                      null
-                    );
-                    setActivePage(
-                      "records"
-                    );
-                  }}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="save-btn"
-                >
-                  {editingId
-                    ? "Update Record"
-                    : "Save Record"}
-                </button>
-
-              </div>
-
-            </form>
-
-          </>
+        {page ===
+          "dashboard" &&
+          renderDashboard()}
+
+        {page ===
+          "projects" &&
+          renderProjects()}
+
+        {page ===
+          "add-project" &&
+          renderAddProject()}
+
+        {page ===
+          "project-details" &&
+          renderProjectDetails()}
+        {page === "employees" && (
+          <Employees />
         )}
 
-        {/* =========================
-            UPCOMING AMC
-        ========================= */}
+        {page === "add-visit" && (
+          <AddVisit
+            onSaved={() => {
+              fetchProjects();
+              setPage("visit-details");
+            }}
+          />
+        )}
 
-        {activePage ===
-          "upcoming" && (
-          <>
-
-            <div className="header">
-
-              <div>
-
-                <h1>
-                  Upcoming AMC
-                </h1>
-
-                <p>
-                  View your upcoming AMC
-                  records
-                </p>
-
-              </div>
-
-            </div>
-
-            <div className="table-container upcoming-table">
-
-              <table>
-
-                <thead>
-
-                  <tr>
-
-                    <th>
-                      Project No.
-                    </th>
-
-                    <th>
-                      Company Name
-                    </th>
-
-                    <th>
-                      AMC Type
-                    </th>
-
-                    <th>
-                      Next AMC
-                    </th>
-
-                    <th>
-                      Status
-                    </th>
-
-                  </tr>
-
-                </thead>
-
-                <tbody>
-
-                  {records
-                    .filter(
-                      (record) =>
-                        getStatus(
-                          record.nextAMCDate
-                        ) ===
-                        "Upcoming"
-                    )
-                    .map(
-                      (record) => (
-
-                        <tr
-                          key={
-                            record.id
-                          }
-                        >
-
-                          <td>
-                            {
-                              record.projectNumber
-                            }
-                          </td>
-
-                          <td>
-                            {
-                              record.companyName
-                            }
-                          </td>
-
-                          <td>
-                            {
-                              record.amcType
-                            }
-                          </td>
-
-                          <td>
-                            {
-                              record.nextAMCDate ||
-                              "-"
-                            }
-                          </td>
-
-                          <td>
-                            <span className="status upcoming">
-                              Upcoming
-                            </span>
-                          </td>
-
-                        </tr>
-
-                      )
-                    )}
-
-                </tbody>
-
-              </table>
-
-            </div>
-
-          </>
+        {page === "visit-details" && (
+          <VisitDetails
+            onBack={() => {
+              setSelectedVisit(null);
+              setPage("dashboard");
+            }}
+          />
         )}
 
       </main>
-
     </div>
   );
 }
