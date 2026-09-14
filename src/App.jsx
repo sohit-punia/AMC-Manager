@@ -11,12 +11,6 @@ const API = "http://localhost:5000/api";
    HELPERS
 ========================= */
 
-function getMonthsForAMCType(amcType) {
-  if (amcType === "Quarterly") return 3;
-  if (amcType === "Half Yearly") return 6;
-  if (amcType === "Yearly") return 12;
-  return 0;
-}
 function getAMCLeft(endDate) {
   if (!endDate) {
     return "-";
@@ -79,45 +73,6 @@ function getAMCLeft(endDate) {
 
   return `${remainingDays} Days`;
 }
-function addMonthsToDate(dateString, months) {
-  if (!dateString || !months) return "";
-
-  const [year, month, day] = dateString
-    .split("-")
-    .map(Number);
-
-  if (!year || !month || !day) return "";
-
-  const totalMonths =
-    year * 12 + (month - 1) + months;
-
-  const targetYear = Math.floor(
-    totalMonths / 12
-  );
-
-  const targetMonth =
-    totalMonths % 12;
-
-  const lastDay = new Date(
-    targetYear,
-    targetMonth + 1,
-    0
-  ).getDate();
-
-  const targetDay = Math.min(
-    day,
-    lastDay
-  );
-
-  return (
-    `${targetYear}-${String(
-      targetMonth + 1
-    ).padStart(2, "0")}-${String(
-      targetDay
-    ).padStart(2, "0")}`
-  );
-}
-
 function formatMoney(value) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -163,6 +118,7 @@ function emptyProject() {
     stationName: "",
     amcType: "Quarterly",
     amcStartDate: "",
+    lastAMCDate: "",
     amcEndDate: "",
     remarks: "",
   };
@@ -176,11 +132,7 @@ function App() {
   const [page, setPage] = useState("dashboard");
 
   const [projects, setProjects] = useState([]);
-  const [employees, setEmployees] = useState([]);
-
   const [selectedProject, setSelectedProject] = useState(null);
-
-  const [selectedVisit, setSelectedVisit] = useState(null);
 
   const [projectForm, setProjectForm] =  useState(emptyProject());
 
@@ -224,35 +176,8 @@ function App() {
       setLoading(false);
     }
   }
-
-  /* =========================
-     FETCH EMPLOYEES
-  ========================= */
-
-  async function fetchEmployees() {
-    try {
-      const response = await fetch(
-        `${API}/employees`
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) return;
-
-      setEmployees(
-        Array.isArray(data) ? data : []
-      );
-    } catch (err) {
-      console.error(
-        "Employee fetch error:",
-        err
-      );
-    }
-  }
-
   useEffect(() => {
     fetchProjects();
-    fetchEmployees();
   }, []);
 
   /* =========================
@@ -397,6 +322,8 @@ function App() {
         "Quarterly",
       amcStartDate:
         project.amcStartDate || "",
+      lastAMCDate:
+        project.lastAMCDate || "",
       amcEndDate:
         project.amcEndDate || "",
       remarks:
@@ -464,167 +391,68 @@ function App() {
   ========================= */
 
   async function openProject(project) {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
+    setError("");
 
-      const response =
-        await fetch(
-          `${API}/projects/${project.id}`
-        );
+    /*
+      Keep the project that is already visible in the list.
+      This guarantees that Project Details can still open
+      even if the detailed API call has a temporary issue.
+    */
+    setSelectedProject(project);
 
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to load project"
-        );
+    const response = await fetch(
+      `${API}/projects/${project.id}`,
+      {
+        cache: "no-store",
       }
-
-      setSelectedProject(data);
-      setPage("project-details");
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /* =========================
-     CREATE AMC VISIT
-  ========================= */
-
-/* =========================
-   CREATE AMC VISIT
-========================= */
-
-function createVisit(projectId) {
-  const project = projects.find(
-    (item) => item.id === projectId
-  );
-
-  if (!project) return;
-
-  const currentVisits =
-    selectedProject?.visits || [];
-
-  const nextVisitNumber =
-    currentVisits.length + 1;
-
-  let visitDate = "";
-
-  if (currentVisits.length > 0) {
-    const lastVisit =
-      currentVisits[currentVisits.length - 1];
-
-    visitDate = addMonthsToDate(
-      lastVisit.visitDate,
-      getMonthsForAMCType(
-        project.amcType
-      )
     );
-  } else {
-    visitDate =
-      project.amcStartDate || "";
-  }
 
-  if (
-    project.amcEndDate &&
-    visitDate &&
-    visitDate > project.amcEndDate
-  ) {
-    alert(
-      "No further AMC visit falls within the AMC period."
-    );
-    return;
-  }
+    const data =
+      await response.json();
 
-  /*
-    Do NOT create the visit here.
-
-    We only open the Add Visit form.
-    The complete visit including employeeName,
-    amount, documents, tour details, etc.
-    will be saved from AddVisit.jsx.
-  */
-
-  setSelectedProject({
-    ...project,
-    visits: currentVisits,
-  });
-
-  setPage("add-visit");
-
-  /*
-    If your AddVisit component accepts
-    these values as props, use:
-
-    nextVisitNumber
-    visitDate
-    project
-  */
-
-  console.log(
-    "Preparing Visit:",
-    nextVisitNumber,
-    visitDate
-  );
-}
-
-  /* =========================
-     UPDATE VISIT
-  ========================= */
-
-  async function updateVisit(
-    visitId,
-    visitDate,
-    remarks
-  ) {
-    try {
-      const response =
-        await fetch(
-          `${API}/visits/${visitId}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              visitDate,
-              remarks,
-            }),
-          }
-        );
-
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            "Failed to update visit"
-        );
-      }
-
-      if (selectedProject) {
-        await openProject(
-          selectedProject
-        );
-      }
-
-      setSelectedVisit(null);
-
-      alert(
-        "Visit updated successfully."
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+          "Failed to load project details"
       );
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
     }
+
+    /*
+      The detailed endpoint returns:
+      project fields + calculated totals + visits
+    */
+    setSelectedProject(data);
+    setPage("project-details");
+
+  } catch (err) {
+    console.error(
+      "Open project error:",
+      err
+    );
+
+    /*
+      Fallback to the project already loaded
+      from the Projects page.
+    */
+    setSelectedProject({
+      ...project,
+      visits:
+        project.visits || [],
+    });
+
+    setPage("project-details");
+
+    setError(
+      err.message ||
+        "Could not load complete project details."
+    );
+
+  } finally {
+    setLoading(false);
   }
+}
 
   /* =========================
      DELETE VISIT
@@ -665,7 +493,7 @@ function createVisit(projectId) {
         );
       }
 
-      setSelectedVisit(null);
+
     } catch (err) {
       console.error(err);
       alert(err.message);
@@ -772,13 +600,8 @@ function createVisit(projectId) {
         active,
         expired,
         upcoming,
-        employees:
-          employees.length,
       };
-    }, [
-      projects,
-      employees,
-    ]);
+    }, [projects]);
 
   /* =========================
      RENDER SIDEBAR
@@ -987,17 +810,6 @@ function createVisit(projectId) {
               </strong>
             </div>
 
-            <div>
-              <span>
-                Employees
-              </span>
-
-              <strong>
-                {
-                  dashboardData.employees
-                }
-              </strong>
-            </div>
 
           </div>
 
@@ -1444,6 +1256,24 @@ function createVisit(projectId) {
                 }
               />
             </div>
+            <div className="field">
+              <label>
+                Last AMC Date
+              </label>
+
+              <input
+                type="date"
+                name="lastAMCDate"
+                value={
+                  projectForm.lastAMCDate || ""
+                }
+                onChange={
+                  handleProjectChange
+                }
+              />
+
+              
+            </div>
 
             <div className="field full">
               <label>
@@ -1549,7 +1379,6 @@ function createVisit(projectId) {
               className="primary-btn"
               onClick={() => {
                 setPage("add-visit");
-                setSelectedVisit(null);
               }}
             >
               + Add AMC Visit
@@ -1733,6 +1562,19 @@ function createVisit(projectId) {
 
               <div>
                 <span>
+                  Last AMC
+                </span>
+
+                <strong>
+                  {
+                    selectedProject.lastAMCDate ||
+                    "-"
+                  }
+                </strong>
+              </div>
+
+              <div>
+                <span>
                   AMC End
                 </span>
 
@@ -1781,7 +1623,6 @@ function createVisit(projectId) {
               className="primary-btn"
               onClick={() => {
                 setPage("add-visit");
-                setSelectedVisit(null);
               }}
             >
               + Add Visit
@@ -1940,23 +1781,93 @@ function createVisit(projectId) {
         {page ===
           "project-details" &&
           renderProjectDetails()}
-        {page === "employees" && (
-          <Employees />
-        )}
-
         {page === "add-visit" && (
           <AddVisit
-            onSaved={() => {
-              fetchProjects();
-              setPage("visit-details");
-            }}
-          />
+              onSaved={async (projectNumber) => {
+                try {
+                  await fetchProjects();
+
+                  const response =
+                    await fetch(
+                      `${API}/projects?projectNumber=${encodeURIComponent(
+                        projectNumber
+                      )}`,
+                      {
+                        cache: "no-store",
+                      }
+                    );
+
+                  const data =
+                    await response.json();
+
+                  if (!response.ok) {
+                    throw new Error(
+                      data.message ||
+                        "Failed to reload project"
+                    );
+                  }
+
+                  const project =
+                    data.find(
+                      (item) =>
+                        String(
+                          item.projectNumber
+                        ).toLowerCase() ===
+                        String(
+                          projectNumber
+                        ).toLowerCase()
+                    );
+
+                  if (!project) {
+                    throw new Error(
+                      "Project not found after saving visit."
+                    );
+                  }
+
+                  const detailResponse =
+                    await fetch(
+                      `${API}/projects/${project.id}`,
+                      {
+                        cache: "no-store",
+                      }
+                    );
+
+                  const detailData =
+                    await detailResponse.json();
+
+                  if (!detailResponse.ok) {
+                    throw new Error(
+                      detailData.message ||
+                        "Failed to load project details"
+                    );
+                  }
+
+                  setSelectedProject(
+                    detailData
+                  );
+
+                  setPage(
+                    "project-details"
+                  );
+
+                } catch (err) {
+                  console.error(
+                    "Project refresh error:",
+                    err
+                  );
+
+                  alert(
+                    err.message ||
+                      "Visit saved, but project could not be refreshed."
+                  );
+                }
+              }}
+            />
         )}
 
         {page === "visit-details" && (
           <VisitDetails
             onBack={() => {
-              setSelectedVisit(null);
               setPage("dashboard");
             }}
           />

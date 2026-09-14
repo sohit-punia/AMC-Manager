@@ -18,28 +18,21 @@ function formatMoney(value) {
 function VisitDetails({
   onBack,
 }) {
-  const [visits, setVisits] =
-    useState([]);
+  const [visits, setVisits] = useState([]);
 
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] =  useState("");
 
-  const [loading, setLoading] =
-    useState(false);
+  const [loading, setLoading] =  useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] =  useState("");
 
-  const [editingVisit, setEditingVisit] =
-    useState(null);
+  const [editingVisit, setEditingVisit] =  useState(null);
 
   /* =========================
      LOAD VISITS
   ========================= */
 
-  async function loadVisits(
-    projectNumber = ""
-  ) {
+  async function loadVisits(projectNumber = "") {
     try {
       setLoading(true);
       setError("");
@@ -51,11 +44,9 @@ function VisitDetails({
             )}`
           : `${API}/visits`;
 
-      const response =
-        await fetch(url);
+      const response =  await fetch(url);
 
-      const data =
-        await response.json();
+      const data =  await response.json();
 
       if (!response.ok) {
         throw new Error(
@@ -85,9 +76,7 @@ function VisitDetails({
      SEARCH
   ========================= */
 
-  async function handleSearch(
-    e
-  ) {
+  async function handleSearch(e) {
     e.preventDefault();
 
     await loadVisits(search);
@@ -97,9 +86,7 @@ function VisitDetails({
      DELETE
   ========================= */
 
-  async function deleteVisit(
-    id
-  ) {
+  async function deleteVisit(id) {
     if (
       !window.confirm(
         "Delete this visit and its documents?"
@@ -493,22 +480,15 @@ function EditVisitModal({
         "",
     });
 
-  const [employees, setEmployees] =
-    useState([]);
+  const [employees, setEmployees] = useState([]);
 
-  const [invoicePdf, setInvoicePdf] =
-    useState(null);
+  const [invoicePdf, setInvoicePdf] =  useState(null);
 
-  const [
-    receivedReportPdf,
-    setReceivedReportPdf,
-  ] = useState(null);
+  const [ receivedReportPdf, setReceivedReportPdf,] = useState(null);
 
-  const [expensePdf, setExpensePdf] =
-    useState(null);
+  const [expensePdf, setExpensePdf] =  useState(null);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [saving, setSaving] =  useState(false);
 
   useEffect(() => {
     loadEmployees();
@@ -565,31 +545,10 @@ function EditVisitModal({
         form.tourExpense
       ) || 0;
 
-    if (
-      amountReceived >
-      totalAmount
-    ) {
-      alert(
-        "Amount Received cannot be greater than Total Amount."
-      );
-      return;
-    }
-
-    if (
-      tourExpense >
-      tourAllocated
-    ) {
-      alert(
-        "Tour Expense cannot be greater than Tour Amount Allocated."
-      );
-      return;
-    }
-
     try {
       setSaving(true);
 
-      const data =
-        new FormData();
+      const data =  new FormData();
 
       data.append(
         "projectNumber",

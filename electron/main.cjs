@@ -151,6 +151,7 @@ ipcMain.handle(
         /\//g,
         path.sep
       );
+      
 
       const uploadsDir = path.join(
         dataDir,
