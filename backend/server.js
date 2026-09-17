@@ -15,6 +15,7 @@ const PORT = 5000;
 
 app.use(cors());
 app.use(express.json());
+
 app.use(
   express.urlencoded({
     extended: true,
@@ -39,10 +40,11 @@ if (!fs.existsSync(dataDir)) {
    UPLOAD DIRECTORY
 ========================================================= */
 
-const uploadDir = path.join(
-  dataDir,
-  "uploads"
-);
+const uploadDir =
+  path.join(
+    dataDir,
+    "uploads"
+  );
 
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, {
@@ -56,39 +58,56 @@ if (!fs.existsSync(uploadDir)) {
 
 const storage =
   multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      cb(null, uploadDir);
+    destination: (
+      _req,
+      _file,
+      cb
+    ) => {
+      cb(
+        null,
+        uploadDir
+      );
     },
 
-    filename: (_req, file, cb) => {
-      const extension = path
-        .extname(
-          file.originalname || ""
-        )
-        .toLowerCase();
+    filename: (
+      _req,
+      file,
+      cb
+    ) => {
+      const extension =
+        path
+          .extname(
+            file.originalname ||
+              ""
+          )
+          .toLowerCase();
 
-      const baseName = path
-        .basename(
-          file.originalname ||
-            "document",
-          extension
-        )
-        .replace(
-          /[^a-zA-Z0-9_-]/g,
-          "_"
-        );
+      const baseName =
+        path
+          .basename(
+            file.originalname ||
+              "document",
+            extension
+          )
+          .replace(
+            /[^a-zA-Z0-9_-]/g,
+            "_"
+          );
 
       const uniqueName =
         `${Date.now()}-${Math.round(
           Math.random() * 1e9
         )}-${baseName || "document"}${extension}`;
 
-      cb(null, uniqueName);
+      cb(
+        null,
+        uniqueName
+      );
     },
   });
 
 /* =========================================================
-   PDF FILE FILTER
+   PDF FILTER
 ========================================================= */
 
 function pdfOnly(
@@ -96,18 +115,24 @@ function pdfOnly(
   file,
   cb
 ) {
-  const extension = path
-    .extname(
-      file.originalname || ""
-    )
-    .toLowerCase();
+  const extension =
+    path
+      .extname(
+        file.originalname ||
+          ""
+      )
+      .toLowerCase();
 
   if (
     file.mimetype ===
       "application/pdf" ||
     extension === ".pdf"
   ) {
-    cb(null, true);
+    cb(
+      null,
+      true
+    );
+
     return;
   }
 
@@ -118,15 +143,19 @@ function pdfOnly(
   );
 }
 
-const upload = multer({
-  storage,
-  fileFilter: pdfOnly,
+const upload =
+  multer({
+    storage,
+    fileFilter:
+      pdfOnly,
 
-  limits: {
-    fileSize:
-      25 * 1024 * 1024,
-  },
-});
+    limits: {
+      fileSize:
+        25 *
+        1024 *
+        1024,
+    },
+  });
 
 /* =========================================================
    STATIC UPLOADS
@@ -134,7 +163,9 @@ const upload = multer({
 
 app.use(
   "/uploads",
-  express.static(uploadDir)
+  express.static(
+    uploadDir
+  )
 );
 
 /* =========================================================
@@ -150,11 +181,13 @@ function sendDbError(
     error
   );
 
-  return res.status(500).json({
-    message:
-      error?.message ||
-      "Database error.",
-  });
+  return res
+    .status(500)
+    .json({
+      message:
+        error?.message ||
+        "Database error.",
+    });
 }
 
 function normalizeProjectNumber(
@@ -165,7 +198,9 @@ function normalizeProjectNumber(
   ).trim();
 }
 
-function toNumber(value) {
+function toNumber(
+  value
+) {
   const number =
     Number(value);
 
@@ -189,8 +224,14 @@ function deleteFile(
 
   const normalized =
     String(storedPath)
-      .replace(/\\/g, "/")
-      .replace(/^\/+/, "");
+      .replace(
+        /\\/g,
+        "/"
+      )
+      .replace(
+        /^\/+/,
+        ""
+      );
 
   if (
     !normalized.startsWith(
@@ -225,7 +266,9 @@ function deleteFile(
   }
 
   if (
-    fs.existsSync(filePath)
+    fs.existsSync(
+      filePath
+    )
   ) {
     try {
       fs.unlinkSync(
@@ -244,9 +287,7 @@ function deleteFile(
    AMC FREQUENCY
 ========================================================= */
 
-function getAMCMonths(
-  amcType
-) {
+function getAMCMonths(amcType) {
   switch (amcType) {
     case "Quarterly":
       return 3;
@@ -256,6 +297,12 @@ function getAMCMonths(
 
     case "Yearly":
       return 12;
+
+    case "2 Yearly":
+      return 24;
+
+    case "3 Yearly":
+      return 36;
 
     default:
       return 0;
@@ -289,7 +336,8 @@ function addAMCMonths(
     ).split("-");
 
   if (
-    parts.length !== 3
+    parts.length !==
+    3
   ) {
     return "";
   }
@@ -311,12 +359,6 @@ function addAMCMonths(
     return "";
   }
 
-  /*
-    Start on day 1 so dates like
-    31 Jan + 1 month do not
-    accidentally overflow.
-  */
-
   const date =
     new Date(
       year,
@@ -332,7 +374,8 @@ function addAMCMonths(
   const lastDay =
     new Date(
       date.getFullYear(),
-      date.getMonth() + 1,
+      date.getMonth() +
+        1,
       0
     ).getDate();
 
@@ -349,12 +392,18 @@ function addAMCMonths(
   const resultMonth =
     String(
       date.getMonth() + 1
-    ).padStart(2, "0");
+    ).padStart(
+      2,
+      "0"
+    );
 
   const resultDay =
     String(
       date.getDate()
-    ).padStart(2, "0");
+    ).padStart(
+      2,
+      "0"
+    );
 
   return `${resultYear}-${resultMonth}-${resultDay}`;
 }
@@ -362,11 +411,11 @@ function addAMCMonths(
 /* =========================================================
    CALCULATE NEXT AMC DATE
 
-   Priority:
+   Latest actual visit is used.
+   If no visit exists, AMC Start Date is used.
 
-   1. Project Last AMC Date
-   2. Latest visit date
-   3. AMC Start Date
+   Last AMC Date remains in the DB only for compatibility
+   with existing data and old project records.
 ========================================================= */
 
 function calculateNextAMCDate(
@@ -374,7 +423,6 @@ function calculateNextAMCDate(
   latestVisitDate = ""
 ) {
   const baseDate =
-    project.lastAMCDate ||
     latestVisitDate ||
     project.amcStartDate ||
     "";
@@ -408,7 +456,10 @@ function getNextVisitNumber(
       WHERE projectId = ?
     `,
     [projectId],
-    (err, row) => {
+    (
+      err,
+      row
+    ) => {
       if (err) {
         return callback(
           err
@@ -417,7 +468,51 @@ function getNextVisitNumber(
 
       const nextNumber =
         Number(
-          row?.maxVisit || 0
+          row?.maxVisit ||
+            0
+        ) + 1;
+
+      callback(
+        null,
+        nextNumber
+      );
+    }
+  );
+}
+
+/* =========================================================
+   GET NEXT BILL NUMBER
+========================================================= */
+
+function getNextBillNumber(
+  projectId,
+  callback
+) {
+  db.get(
+    `
+      SELECT
+        COALESCE(
+          MAX(billNumber),
+          0
+        ) AS maxBill
+      FROM amc_bills
+      WHERE projectId = ?
+    `,
+    [projectId],
+    (
+      err,
+      row
+    ) => {
+      if (err) {
+        return callback(
+          err
+        );
+      }
+
+      const nextNumber =
+        Number(
+          row?.maxBill ||
+            0
         ) + 1;
 
       callback(
@@ -448,7 +543,10 @@ function getLatestVisitDate(
         AND visitDate != ''
     `,
     [projectId],
-    (err, row) => {
+    (
+      err,
+      row
+    ) => {
       if (err) {
         return callback(
           err
@@ -465,16 +563,10 @@ function getLatestVisitDate(
 }
 
 /* =========================================================
-   REFRESH PROJECT LAST AMC FROM VISITS
+   REFRESH LAST AMC DATE
 
-   Used after:
-   - deleting a visit
-   - moving a visit
-   - editing a visit
-
-   IMPORTANT:
-   Project editing does NOT call this function,
-   so a manually entered Last AMC Date is preserved.
+   Kept for compatibility with the existing visit system.
+   This does NOT control the new Next AMC calculation.
 ========================================================= */
 
 function refreshProjectLastAMCDate(
@@ -493,12 +585,9 @@ function refreshProjectLastAMCDate(
         );
       }
 
-      /*
-        If there is at least one visit,
-        latest visit becomes Last AMC.
-      */
-
-      if (latestVisitDate) {
+      if (
+        latestVisitDate
+      ) {
         db.run(
           `
             UPDATE projects
@@ -512,7 +601,9 @@ function refreshProjectLastAMCDate(
             latestVisitDate,
             projectId,
           ],
-          (updateErr) => {
+          (
+            updateErr
+          ) => {
             callback(
               updateErr ||
                 null
@@ -523,20 +614,15 @@ function refreshProjectLastAMCDate(
         return;
       }
 
-      /*
-        No visits remain.
-
-        Do not erase a manually entered
-        Last AMC Date.
-      */
-
-      callback(null);
+      callback(
+        null
+      );
     }
   );
 }
 
 /* =========================================================
-   FIND PROJECT
+   FIND PROJECT BY NUMBER
 ========================================================= */
 
 function findProjectByNumber(
@@ -573,7 +659,10 @@ function findProjectByNumber(
 
 app.get(
   "/",
-  (_req, res) => {
+  (
+    _req,
+    res
+  ) => {
     res.json({
       message:
         "AMC Manager v2 Backend is Running",
@@ -587,7 +676,10 @@ app.get(
 
 app.get(
   "/api/projects",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const projectNumber =
       normalizeProjectNumber(
         req.query.projectNumber
@@ -614,20 +706,19 @@ app.get(
       SELECT
         p.*,
 
-        /* ===============================================
+        /* =================================================
            NUMBER OF VISITS
-        =============================================== */
+        ================================================= */
 
         (
           SELECT COUNT(*)
           FROM amc_visits v
-          WHERE
-            v.projectId = p.id
+          WHERE v.projectId = p.id
         ) AS visitCount,
 
-        /* ===============================================
+        /* =================================================
            LATEST VISIT DATE
-        =============================================== */
+        ================================================= */
 
         (
           SELECT MAX(v.visitDate)
@@ -638,51 +729,68 @@ app.get(
             AND v.visitDate != ''
         ) AS latestVisitDate,
 
-        /* ===============================================
-           TOTAL BILLS / AMC DONE
-        =============================================== */
+        /* =================================================
+           NUMBER OF BILLS
+        ================================================= */
+
+        (
+          SELECT COUNT(*)
+          FROM amc_bills b
+          WHERE b.projectId = p.id
+        ) AS billCount,
+
+        /* =================================================
+           TOTAL BILL AMOUNT
+        ================================================= */
 
         COALESCE(
           (
             SELECT SUM(
               COALESCE(
-                v.totalAmount,
+                b.billAmount,
                 0
               )
             )
-            FROM amc_visits v
-            WHERE
-              v.projectId = p.id
+            FROM amc_bills b
+            WHERE b.projectId = p.id
           ),
           0
-        ) AS totalBillsAmount,
+        ) AS totalBillAmount,
 
-        /* ===============================================
-           RECEIVED AMOUNT
-        =============================================== */
+        /* =================================================
+           TOTAL RECEIVED AMOUNT
+        ================================================= */
 
         COALESCE(
           (
             SELECT SUM(
               COALESCE(
-                v.amountReceived,
+                b.amountReceived,
                 0
               )
             )
-            FROM amc_visits v
-            WHERE
-              v.projectId = p.id
+            FROM amc_bills b
+            WHERE b.projectId = p.id
           ),
           0
         ) AS receivedAmount,
 
-        /* ===============================================
-           PENDING AMOUNT
-        =============================================== */
+        /* =================================================
+           PENDING BILL AMOUNT
+        ================================================= */
 
         (
           COALESCE(
-            p.totalOrderAmount,
+            (
+              SELECT SUM(
+                COALESCE(
+                  b.billAmount,
+                  0
+                )
+              )
+              FROM amc_bills b
+              WHERE b.projectId = p.id
+            ),
             0
           )
           -
@@ -690,17 +798,16 @@ app.get(
             (
               SELECT SUM(
                 COALESCE(
-                  v.amountReceived,
+                  b.amountReceived,
                   0
                 )
               )
-              FROM amc_visits v
-              WHERE
-                v.projectId = p.id
+              FROM amc_bills b
+              WHERE b.projectId = p.id
             ),
             0
           )
-        ) AS pendingAmount
+        ) AS pendingBillAmount
 
       FROM projects p
 
@@ -713,7 +820,10 @@ app.get(
     db.all(
       sql,
       params,
-      (err, rows) => {
+      (
+        err,
+        rows
+      ) => {
         if (err) {
           return sendDbError(
             res,
@@ -722,8 +832,12 @@ app.get(
         }
 
         const projects =
-          (rows || []).map(
-            (project) => ({
+          (
+            rows || []
+          ).map(
+            (
+              project
+            ) => ({
               ...project,
 
               nextAMCDate:
@@ -747,9 +861,14 @@ app.get(
                   project.visitCount
                 ),
 
-              totalBillsAmount:
+              billCount:
                 toNumber(
-                  project.totalBillsAmount
+                  project.billCount
+                ),
+
+              totalBillAmount:
+                toNumber(
+                  project.totalBillAmount
                 ),
 
               receivedAmount:
@@ -757,9 +876,9 @@ app.get(
                   project.receivedAmount
                 ),
 
-              pendingAmount:
+              pendingBillAmount:
                 toNumber(
-                  project.pendingAmount
+                  project.pendingBillAmount
                 ),
             })
           );
@@ -778,36 +897,46 @@ app.get(
 
 app.get(
   "/api/projects/:id",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const id =
       Number(
         req.params.id
       );
 
     if (
-      !Number.isInteger(id) ||
+      !Number.isInteger(
+        id
+      ) ||
       id <= 0
     ) {
-      return res.status(400).json({
-        message:
-          "Invalid project ID.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid project ID.",
+        });
     }
 
     const sql = `
       SELECT
         p.*,
 
-        /* VISIT COUNT */
+        /* =================================================
+           VISIT COUNT
+        ================================================= */
 
         (
           SELECT COUNT(*)
           FROM amc_visits v
-          WHERE
-            v.projectId = p.id
+          WHERE v.projectId = p.id
         ) AS visitCount,
 
-        /* LATEST VISIT */
+        /* =================================================
+           LATEST VISIT
+        ================================================= */
 
         (
           SELECT MAX(v.visitDate)
@@ -818,45 +947,68 @@ app.get(
             AND v.visitDate != ''
         ) AS latestVisitDate,
 
-        /* TOTAL BILLS */
+        /* =================================================
+           BILL COUNT
+        ================================================= */
+
+        (
+          SELECT COUNT(*)
+          FROM amc_bills b
+          WHERE b.projectId = p.id
+        ) AS billCount,
+
+        /* =================================================
+           TOTAL BILL AMOUNT
+        ================================================= */
 
         COALESCE(
           (
             SELECT SUM(
               COALESCE(
-                v.totalAmount,
+                b.billAmount,
                 0
               )
             )
-            FROM amc_visits v
-            WHERE
-              v.projectId = p.id
+            FROM amc_bills b
+            WHERE b.projectId = p.id
           ),
           0
-        ) AS totalBillsAmount,
+        ) AS totalBillAmount,
 
-        /* RECEIVED */
+        /* =================================================
+           RECEIVED AMOUNT
+        ================================================= */
 
         COALESCE(
           (
             SELECT SUM(
               COALESCE(
-                v.amountReceived,
+                b.amountReceived,
                 0
               )
             )
-            FROM amc_visits v
-            WHERE
-              v.projectId = p.id
+            FROM amc_bills b
+            WHERE b.projectId = p.id
           ),
           0
         ) AS receivedAmount,
 
-        /* PENDING */
+        /* =================================================
+           PENDING BILL AMOUNT
+        ================================================= */
 
         (
           COALESCE(
-            p.totalOrderAmount,
+            (
+              SELECT SUM(
+                COALESCE(
+                  b.billAmount,
+                  0
+                )
+              )
+              FROM amc_bills b
+              WHERE b.projectId = p.id
+            ),
             0
           )
           -
@@ -864,22 +1016,20 @@ app.get(
             (
               SELECT SUM(
                 COALESCE(
-                  v.amountReceived,
+                  b.amountReceived,
                   0
                 )
               )
-              FROM amc_visits v
-              WHERE
-                v.projectId = p.id
+              FROM amc_bills b
+              WHERE b.projectId = p.id
             ),
             0
           )
-        ) AS pendingAmount
+        ) AS pendingBillAmount
 
       FROM projects p
 
-      WHERE
-        p.id = ?
+      WHERE p.id = ?
     `;
 
     db.get(
@@ -897,20 +1047,24 @@ app.get(
         }
 
         if (!project) {
-          return res.status(404).json({
-            message:
-              "Project not found.",
-          });
+          return res
+            .status(404)
+            .json({
+              message:
+                "Project not found.",
+            });
         }
+
+        /* =================================================
+           GET VISITS
+        ================================================= */
 
         db.all(
           `
             SELECT *
             FROM amc_visits
-            WHERE
-              projectId = ?
-            ORDER BY
-              visitNumber ASC
+            WHERE projectId = ?
+            ORDER BY visitNumber ASC
           `,
           [id],
           (
@@ -924,48 +1078,106 @@ app.get(
               );
             }
 
-            res.json({
-              ...project,
+            /* =============================================
+               GET BILLS
+            ============================================= */
 
-              nextAMCDate:
-                calculateNextAMCDate(
-                  project,
-                  project.latestVisitDate
-                ),
+            db.all(
+              `
+                SELECT
+                  b.*,
 
-              totalOrderAmount:
-                toNumber(
-                  project.totalOrderAmount
-                ),
+                  CASE
+                    WHEN COALESCE(
+                      b.amountReceived,
+                      0
+                    ) <= 0
+                      THEN 'Pending'
 
-              numberOfStations:
-                toNumber(
-                  project.numberOfStations
-                ),
+                    WHEN COALESCE(
+                      b.amountReceived,
+                      0
+                    ) >= COALESCE(
+                      b.billAmount,
+                      0
+                    )
+                      THEN 'Paid'
 
-              visitCount:
-                toNumber(
-                  project.visitCount
-                ),
+                    ELSE 'Partial'
+                  END AS status
 
-              totalBillsAmount:
-                toNumber(
-                  project.totalBillsAmount
-                ),
+                FROM amc_bills b
 
-              receivedAmount:
-                toNumber(
-                  project.receivedAmount
-                ),
+                WHERE
+                  b.projectId = ?
 
-              pendingAmount:
-                toNumber(
-                  project.pendingAmount
-                ),
+                ORDER BY
+                  b.billNumber ASC
+              `,
+              [id],
+              (
+                billErr,
+                bills
+              ) => {
+                if (billErr) {
+                  return sendDbError(
+                    res,
+                    billErr
+                  );
+                }
 
-              visits:
-                visits || [],
-            });
+                res.json({
+                  ...project,
+
+                  nextAMCDate:
+                    calculateNextAMCDate(
+                      project,
+                      project.latestVisitDate
+                    ),
+
+                  totalOrderAmount:
+                    toNumber(
+                      project.totalOrderAmount
+                    ),
+
+                  numberOfStations:
+                    toNumber(
+                      project.numberOfStations
+                    ),
+
+                  visitCount:
+                    toNumber(
+                      project.visitCount
+                    ),
+
+                  billCount:
+                    toNumber(
+                      project.billCount
+                    ),
+
+                  totalBillAmount:
+                    toNumber(
+                      project.totalBillAmount
+                    ),
+
+                  receivedAmount:
+                    toNumber(
+                      project.receivedAmount
+                    ),
+
+                  pendingBillAmount:
+                    toNumber(
+                      project.pendingBillAmount
+                    ),
+
+                  visits:
+                    visits || [],
+
+                  bills:
+                    bills || [],
+                });
+              }
+            );
           }
         );
       }
@@ -979,7 +1191,10 @@ app.get(
 
 app.post(
   "/api/projects",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const projectNumber =
       normalizeProjectNumber(
         req.body.projectNumber
@@ -987,7 +1202,8 @@ app.post(
 
     const companyName =
       String(
-        req.body.companyName ?? ""
+        req.body.companyName ??
+          ""
       ).trim();
 
     const companyAddress =
@@ -1029,6 +1245,10 @@ app.post(
       req.body.amcStartDate ||
       "";
 
+    /*
+      Kept for compatibility with your existing database.
+      It is no longer used for calculating Next AMC.
+    */
     const lastAMCDate =
       req.body.lastAMCDate ||
       "";
@@ -1042,24 +1262,30 @@ app.post(
       "";
 
     if (!projectNumber) {
-      return res.status(400).json({
-        message:
-          "Project Number is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Project Number is required.",
+        });
     }
 
     if (!companyName) {
-      return res.status(400).json({
-        message:
-          "Company Name is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Company Name is required.",
+        });
     }
 
     if (!amcType) {
-      return res.status(400).json({
-        message:
-          "AMC Type is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "AMC Type is required.",
+        });
     }
 
     const sql = `
@@ -1109,10 +1335,12 @@ app.post(
               "UNIQUE constraint failed"
             )
           ) {
-            return res.status(409).json({
-              message:
-                "Project Number already exists.",
-            });
+            return res
+              .status(409)
+              .json({
+                message:
+                  "Project Number already exists.",
+              });
           }
 
           return sendDbError(
@@ -1121,13 +1349,15 @@ app.post(
           );
         }
 
-        res.status(201).json({
-          message:
-            "Project created successfully.",
+        res
+          .status(201)
+          .json({
+            message:
+              "Project created successfully.",
 
-          projectId:
-            this.lastID,
-        });
+            projectId:
+              this.lastID,
+          });
       }
     );
   }
@@ -1139,20 +1369,27 @@ app.post(
 
 app.put(
   "/api/projects/:id",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const id =
       Number(
         req.params.id
       );
 
     if (
-      !Number.isInteger(id) ||
+      !Number.isInteger(
+        id
+      ) ||
       id <= 0
     ) {
-      return res.status(400).json({
-        message:
-          "Invalid project ID.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid project ID.",
+        });
     }
 
     const projectNumber =
@@ -1162,7 +1399,8 @@ app.put(
 
     const companyName =
       String(
-        req.body.companyName ?? ""
+        req.body.companyName ??
+          ""
       ).trim();
 
     const companyAddress =
@@ -1217,30 +1455,35 @@ app.put(
       "";
 
     if (!projectNumber) {
-      return res.status(400).json({
-        message:
-          "Project Number is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Project Number is required.",
+        });
     }
 
     if (!companyName) {
-      return res.status(400).json({
-        message:
-          "Company Name is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Company Name is required.",
+        });
     }
 
     if (!amcType) {
-      return res.status(400).json({
-        message:
-          "AMC Type is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "AMC Type is required.",
+        });
     }
 
     /*
-      Check the requested project number against
-      other projects, but allow the current project
-      to keep its own project number.
+      Allow current project to keep its own number.
+      Reject only another project's number.
     */
 
     db.get(
@@ -1268,10 +1511,12 @@ app.put(
         }
 
         if (duplicate) {
-          return res.status(409).json({
-            message:
-              "Project Number already exists.",
-          });
+          return res
+            .status(409)
+            .json({
+              message:
+                "Project Number already exists.",
+            });
         }
 
         const sql = `
@@ -1324,22 +1569,16 @@ app.put(
             }
 
             if (
-              this.changes === 0
+              this.changes ===
+              0
             ) {
-              return res.status(404).json({
-                message:
-                  "Project not found.",
-              });
+              return res
+                .status(404)
+                .json({
+                  message:
+                    "Project not found.",
+                });
             }
-
-            /*
-              IMPORTANT:
-              Do NOT refresh Last AMC Date
-              from old visits here.
-
-              This allows you to manually reset
-              Last AMC Date from Edit Project.
-            */
 
             res.json({
               message:
@@ -1358,21 +1597,32 @@ app.put(
 
 app.delete(
   "/api/projects/:id",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const id =
       Number(
         req.params.id
       );
 
     if (
-      !Number.isInteger(id) ||
+      !Number.isInteger(
+        id
+      ) ||
       id <= 0
     ) {
-      return res.status(400).json({
-        message:
-          "Invalid project ID.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid project ID.",
+        });
     }
+
+    /*
+      Get visit files before deleting project.
+    */
 
     db.all(
       `
@@ -1395,50 +1645,95 @@ app.delete(
           );
         }
 
-        db.run(
+        /*
+          Get bill files before deleting project.
+        */
+
+        db.all(
           `
-            DELETE FROM projects
-            WHERE id = ?
+            SELECT
+              invoicePdf
+            FROM amc_bills
+            WHERE projectId = ?
           `,
           [id],
-          function (err) {
-            if (err) {
+          (
+            billErr,
+            bills
+          ) => {
+            if (billErr) {
               return sendDbError(
                 res,
-                err
+                billErr
               );
             }
 
-            if (
-              this.changes === 0
-            ) {
-              return res.status(404).json({
-                message:
-                  "Project not found.",
-              });
-            }
+            db.run(
+              `
+                DELETE FROM projects
+                WHERE id = ?
+              `,
+              [id],
+              function (err) {
+                if (err) {
+                  return sendDbError(
+                    res,
+                    err
+                  );
+                }
 
-            for (
-              const visit of
-              visits || []
-            ) {
-              deleteFile(
-                visit.invoicePdf
-              );
+                if (
+                  this.changes ===
+                  0
+                ) {
+                  return res
+                    .status(404)
+                    .json({
+                      message:
+                        "Project not found.",
+                    });
+                }
 
-              deleteFile(
-                visit.receivedReportPdf
-              );
+                /*
+                  Delete visit files.
+                */
 
-              deleteFile(
-                visit.expensePdf
-              );
-            }
+                for (
+                  const visit of
+                  visits || []
+                ) {
+                  deleteFile(
+                    visit.invoicePdf
+                  );
 
-            res.json({
-              message:
-                "Project and its visits deleted successfully.",
-            });
+                  deleteFile(
+                    visit.receivedReportPdf
+                  );
+
+                  deleteFile(
+                    visit.expensePdf
+                  );
+                }
+
+                /*
+                  Delete bill files.
+                */
+
+                for (
+                  const bill of
+                  bills || []
+                ) {
+                  deleteFile(
+                    bill.invoicePdf
+                  );
+                }
+
+                res.json({
+                  message:
+                    "Project and its visits and bills deleted successfully.",
+                });
+              }
+            );
           }
         );
       }
@@ -1452,7 +1747,10 @@ app.delete(
 
 app.get(
   "/api/visits",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const projectNumber =
       normalizeProjectNumber(
         req.query.projectNumber
@@ -1493,9 +1791,12 @@ app.get(
         v.remarks,
         v.createdAt,
         v.updatedAt,
+
         p.projectNumber,
         p.companyName
+
       FROM amc_visits v
+
       INNER JOIN projects p
         ON p.id = v.projectId
 
@@ -1509,7 +1810,10 @@ app.get(
     db.all(
       sql,
       params,
-      (err, rows) => {
+      (
+        err,
+        rows
+      ) => {
         if (err) {
           return sendDbError(
             res,
@@ -1531,34 +1835,44 @@ app.get(
 
 app.get(
   "/api/visits/:id",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const id =
       Number(
         req.params.id
       );
 
     if (
-      !Number.isInteger(id) ||
+      !Number.isInteger(
+        id
+      ) ||
       id <= 0
     ) {
-      return res.status(400).json({
-        message:
-          "Invalid visit ID.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid visit ID.",
+        });
     }
 
     db.get(
       `
         SELECT
           v.*,
+
           p.projectNumber,
           p.companyName,
           p.totalOrderAmount
+
         FROM amc_visits v
+
         INNER JOIN projects p
           ON p.id = v.projectId
-        WHERE
-          v.id = ?
+
+        WHERE v.id = ?
       `,
       [id],
       (
@@ -1573,10 +1887,12 @@ app.get(
         }
 
         if (!visit) {
-          return res.status(404).json({
-            message:
-              "Visit not found.",
-          });
+          return res
+            .status(404)
+            .json({
+              message:
+                "Visit not found.",
+            });
         }
 
         res.json(
@@ -1595,7 +1911,8 @@ app.post(
   "/api/visits",
   upload.fields([
     {
-      name: "invoicePdf",
+      name:
+        "invoicePdf",
       maxCount: 1,
     },
     {
@@ -1604,17 +1921,21 @@ app.post(
       maxCount: 1,
     },
     {
-      name: "expensePdf",
+      name:
+        "expensePdf",
       maxCount: 1,
     },
   ]),
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const projectNumber =
       normalizeProjectNumber(
         req.body.projectNumber
       );
 
-    const visitNumber =
+    const requestedVisitNumber =
       Math.trunc(
         toNumber(
           req.body.visitNumber
@@ -1630,6 +1951,13 @@ app.post(
         req.body.employeeName ??
           ""
       ).trim();
+
+    /*
+      Existing visit amount fields are preserved
+      so current visit functionality is not broken.
+
+      These are now independent from project billing totals.
+    */
 
     const totalAmount =
       toNumber(
@@ -1647,8 +1975,7 @@ app.post(
 
     const tourAmountAllocated =
       toNumber(
-        req.body
-          .tourAmountAllocated
+        req.body.tourAmountAllocated
       );
 
     const tourExpense =
@@ -1661,17 +1988,21 @@ app.post(
       "";
 
     if (!projectNumber) {
-      return res.status(400).json({
-        message:
-          "Project Number is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Project Number is required.",
+        });
     }
 
     if (!visitDate) {
-      return res.status(400).json({
-        message:
-          "Visit Date is required.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Visit Date is required.",
+        });
     }
 
     findProjectByNumber(
@@ -1688,10 +2019,12 @@ app.post(
         }
 
         if (!project) {
-          return res.status(404).json({
-            message:
-              "Project Number not found.",
-          });
+          return res
+            .status(404)
+            .json({
+              message:
+                "Project Number not found.",
+            });
         }
 
         const saveVisit =
@@ -1699,17 +2032,20 @@ app.post(
             finalVisitNumber
           ) => {
             const files =
-              req.files || {};
+              req.files ||
+              {};
 
             const invoiceFile =
-              files.invoicePdf?.[0];
+              files
+                .invoicePdf?.[0];
 
             const receivedFile =
               files
                 .receivedReportPdf?.[0];
 
             const expenseFile =
-              files.expensePdf?.[0];
+              files
+                .expensePdf?.[0];
 
             const invoicePath =
               invoiceFile
@@ -1749,29 +2085,17 @@ app.post(
 
             const values = [
               project.id,
-
               finalVisitNumber,
-
               visitDate,
-
               employeeName,
-
               totalAmount,
-
               invoicePath,
-
               amountReceived,
-
               amountReceivedDate,
-
               receivedReportPath,
-
               tourAmountAllocated,
-
               tourExpense,
-
               expensePath,
-
               remarks,
             ];
 
@@ -1780,24 +2104,25 @@ app.post(
               values,
               function (err) {
                 if (err) {
-                  /*
-                    If database insert fails,
-                    remove files that were just uploaded.
-                  */
-
-                  if (invoiceFile) {
+                  if (
+                    invoiceFile
+                  ) {
                     deleteFile(
                       invoicePath
                     );
                   }
 
-                  if (receivedFile) {
+                  if (
+                    receivedFile
+                  ) {
                     deleteFile(
                       receivedReportPath
                     );
                   }
 
-                  if (expenseFile) {
+                  if (
+                    expenseFile
+                  ) {
                     deleteFile(
                       expensePath
                     );
@@ -1808,10 +2133,12 @@ app.post(
                       "UNIQUE constraint failed"
                     )
                   ) {
-                    return res.status(409).json({
-                      message:
-                        "This visit number already exists for this project.",
-                    });
+                    return res
+                      .status(409)
+                      .json({
+                        message:
+                          "This visit number already exists for this project.",
+                      });
                   }
 
                   return sendDbError(
@@ -1824,9 +2151,10 @@ app.post(
                   this.lastID;
 
                 /*
-                  IMPORTANT:
-                  Every newly saved AMC visit becomes
-                  the project's latest AMC date.
+                  Keep existing Last AMC database behavior
+                  for compatibility.
+
+                  New Next AMC calculation uses latest visit directly.
                 */
 
                 db.run(
@@ -1842,23 +2170,29 @@ app.post(
                     visitDate,
                     project.id,
                   ],
-                  (updateErr) => {
-                    if (updateErr) {
+                  (
+                    updateErr
+                  ) => {
+                    if (
+                      updateErr
+                    ) {
                       console.error(
                         "Error updating Last AMC Date:",
                         updateErr.message
                       );
                     }
 
-                    res.status(201).json({
-                      message:
-                        "Visit created successfully.",
+                    res
+                      .status(201)
+                      .json({
+                        message:
+                          "Visit created successfully.",
 
-                      visitId,
+                        visitId,
 
-                      visitNumber:
-                        finalVisitNumber,
-                    });
+                        visitNumber:
+                          finalVisitNumber,
+                      });
                   }
                 );
               }
@@ -1866,10 +2200,11 @@ app.post(
           };
 
         if (
-          visitNumber > 0
+          requestedVisitNumber >
+          0
         ) {
           saveVisit(
-            visitNumber
+            requestedVisitNumber
           );
         } else {
           getNextVisitNumber(
@@ -1904,7 +2239,8 @@ app.put(
   "/api/visits/:id",
   upload.fields([
     {
-      name: "invoicePdf",
+      name:
+        "invoicePdf",
       maxCount: 1,
     },
     {
@@ -1913,24 +2249,32 @@ app.put(
       maxCount: 1,
     },
     {
-      name: "expensePdf",
+      name:
+        "expensePdf",
       maxCount: 1,
     },
   ]),
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const id =
       Number(
         req.params.id
       );
 
     if (
-      !Number.isInteger(id) ||
+      !Number.isInteger(
+        id
+      ) ||
       id <= 0
     ) {
-      return res.status(400).json({
-        message:
-          "Invalid visit ID.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid visit ID.",
+        });
     }
 
     db.get(
@@ -1952,10 +2296,12 @@ app.put(
         }
 
         if (!existing) {
-          return res.status(404).json({
-            message:
-              "Visit not found.",
-          });
+          return res
+            .status(404)
+            .json({
+              message:
+                "Visit not found.",
+            });
         }
 
         const projectNumber =
@@ -1968,7 +2314,8 @@ app.put(
             toNumber(
               req.body.visitNumber
             )
-          ) || existing.visitNumber;
+          ) ||
+          existing.visitNumber;
 
         const visitDate =
           req.body.visitDate ||
@@ -1991,8 +2338,7 @@ app.put(
           );
 
         const amountReceivedDate =
-          req.body
-            .amountReceivedDate ||
+          req.body.amountReceivedDate ||
           "";
 
         const tourAmountAllocated =
@@ -2010,20 +2356,22 @@ app.put(
           req.body.remarks ||
           "";
 
-        if (
-          !projectNumber
-        ) {
-          return res.status(400).json({
-            message:
-              "Project Number is required.",
-          });
+        if (!projectNumber) {
+          return res
+            .status(400)
+            .json({
+              message:
+                "Project Number is required.",
+            });
         }
 
         if (!visitDate) {
-          return res.status(400).json({
-            message:
-              "Visit Date is required.",
-          });
+          return res
+            .status(400)
+            .json({
+              message:
+                "Visit Date is required.",
+            });
         }
 
         findProjectByNumber(
@@ -2040,10 +2388,12 @@ app.put(
             }
 
             if (!project) {
-              return res.status(404).json({
-                message:
-                  "Project Number not found.",
-              });
+              return res
+                .status(404)
+                .json({
+                  message:
+                    "Project Number not found.",
+                });
             }
 
             const oldProjectId =
@@ -2053,7 +2403,8 @@ app.put(
               project.id;
 
             const files =
-              req.files || {};
+              req.files ||
+              {};
 
             let invoicePath =
               existing.invoicePdf ||
@@ -2068,37 +2419,41 @@ app.put(
               "";
 
             const newInvoice =
-              files.invoicePdf?.[0];
+              files
+                .invoicePdf?.[0];
 
             const newReceivedReport =
               files
                 .receivedReportPdf?.[0];
 
             const newExpense =
-              files.expensePdf?.[0];
+              files
+                .expensePdf?.[0];
 
-            /*
-              Create new paths first.
-            */
-
-            if (newInvoice) {
+            if (
+              newInvoice
+            ) {
               invoicePath =
                 `/uploads/${newInvoice.filename}`;
             }
 
-            if (newReceivedReport) {
+            if (
+              newReceivedReport
+            ) {
               receivedReportPath =
                 `/uploads/${newReceivedReport.filename}`;
             }
 
-            if (newExpense) {
+            if (
+              newExpense
+            ) {
               expensePath =
                 `/uploads/${newExpense.filename}`;
             }
 
             /*
-              Check for duplicate visit number
-              in another row.
+              Check duplicate visit number
+              within target project.
             */
 
             db.get(
@@ -2119,20 +2474,21 @@ app.put(
                 duplicateErr,
                 duplicate
               ) => {
-                if (duplicateErr) {
+                if (
+                  duplicateErr
+                ) {
                   return sendDbError(
                     res,
                     duplicateErr
                   );
                 }
 
-                if (duplicate) {
-                  /*
-                    Remove newly uploaded files
-                    because update is not happening.
-                  */
-
-                  if (newInvoice) {
+                if (
+                  duplicate
+                ) {
+                  if (
+                    newInvoice
+                  ) {
                     deleteFile(
                       invoicePath
                     );
@@ -2146,16 +2502,20 @@ app.put(
                     );
                   }
 
-                  if (newExpense) {
+                  if (
+                    newExpense
+                  ) {
                     deleteFile(
                       expensePath
                     );
                   }
 
-                  return res.status(409).json({
-                    message:
-                      "This visit number already exists for this project.",
-                  });
+                  return res
+                    .status(409)
+                    .json({
+                      message:
+                        "This visit number already exists for this project.",
+                    });
                 }
 
                 const sql = `
@@ -2181,31 +2541,18 @@ app.put(
 
                 const values = [
                   newProjectId,
-
                   visitNumber,
-
                   visitDate,
-
                   employeeName,
-
                   totalAmount,
-
                   invoicePath,
-
                   amountReceived,
-
                   amountReceivedDate,
-
                   receivedReportPath,
-
                   tourAmountAllocated,
-
                   tourExpense,
-
                   expensePath,
-
                   remarks,
-
                   id,
                 ];
 
@@ -2214,12 +2561,9 @@ app.put(
                   values,
                   function (err) {
                     if (err) {
-                      /*
-                        Remove newly uploaded files if
-                        database update failed.
-                      */
-
-                      if (newInvoice) {
+                      if (
+                        newInvoice
+                      ) {
                         deleteFile(
                           invoicePath
                         );
@@ -2233,7 +2577,9 @@ app.put(
                         );
                       }
 
-                      if (newExpense) {
+                      if (
+                        newExpense
+                      ) {
                         deleteFile(
                           expensePath
                         );
@@ -2246,8 +2592,8 @@ app.put(
                     }
 
                     /*
-                      Delete replaced old files only
-                      after the database update succeeds.
+                      Delete replaced files only
+                      after successful update.
                     */
 
                     if (
@@ -2278,13 +2624,8 @@ app.put(
                     }
 
                     /*
-                      Refresh the project(s).
-
-                      If moved to another project:
-                      refresh old project and new project.
-
-                      If it stayed in the same project:
-                      refresh that project once.
+                      Refresh affected project's latest
+                      AMC database field.
                     */
 
                     if (
@@ -2293,7 +2634,9 @@ app.put(
                     ) {
                       refreshProjectLastAMCDate(
                         newProjectId,
-                        (refreshErr) => {
+                        (
+                          refreshErr
+                        ) => {
                           if (
                             refreshErr
                           ) {
@@ -2315,7 +2658,9 @@ app.put(
 
                     refreshProjectLastAMCDate(
                       oldProjectId,
-                      (oldRefreshErr) => {
+                      (
+                        oldRefreshErr
+                      ) => {
                         if (
                           oldRefreshErr
                         ) {
@@ -2327,7 +2672,9 @@ app.put(
 
                         refreshProjectLastAMCDate(
                           newProjectId,
-                          (newRefreshErr) => {
+                          (
+                            newRefreshErr
+                          ) => {
                             if (
                               newRefreshErr
                             ) {
@@ -2362,20 +2709,27 @@ app.put(
 
 app.delete(
   "/api/visits/:id",
-  (req, res) => {
+  (
+    req,
+    res
+  ) => {
     const id =
       Number(
         req.params.id
       );
 
     if (
-      !Number.isInteger(id) ||
+      !Number.isInteger(
+        id
+      ) ||
       id <= 0
     ) {
-      return res.status(400).json({
-        message:
-          "Invalid visit ID.",
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid visit ID.",
+        });
     }
 
     db.get(
@@ -2397,10 +2751,12 @@ app.delete(
         }
 
         if (!visit) {
-          return res.status(404).json({
-            message:
-              "Visit not found.",
-          });
+          return res
+            .status(404)
+            .json({
+              message:
+                "Visit not found.",
+            });
         }
 
         db.run(
@@ -2417,10 +2773,6 @@ app.delete(
               );
             }
 
-            /*
-              Delete associated files.
-            */
-
             deleteFile(
               visit.invoicePdf
             );
@@ -2433,21 +2785,14 @@ app.delete(
               visit.expensePdf
             );
 
-            /*
-              Recalculate Last AMC for the
-              affected project.
-
-              If there are remaining visits,
-              latest visit becomes Last AMC.
-
-              If no visits remain, the manual
-              Last AMC Date is preserved.
-            */
-
             refreshProjectLastAMCDate(
               visit.projectId,
-              (refreshErr) => {
-                if (refreshErr) {
+              (
+                refreshErr
+              ) => {
+                if (
+                  refreshErr
+                ) {
                   console.error(
                     "Project AMC refresh error:",
                     refreshErr.message
@@ -2468,6 +2813,722 @@ app.delete(
 );
 
 /* =========================================================
+   BILLS
+========================================================= */
+
+/* =========================================================
+   GET ALL BILLS
+   Optional:
+   /api/bills?projectNumber=001
+========================================================= */
+
+app.get(
+  "/api/bills",
+  (
+    req,
+    res
+  ) => {
+    const projectNumber =
+      normalizeProjectNumber(
+        req.query.projectNumber
+      );
+
+    const params = [];
+
+    let whereClause =
+      "";
+
+    if (projectNumber) {
+      whereClause = `
+        WHERE LOWER(
+          p.projectNumber
+        ) LIKE LOWER(?)
+      `;
+
+      params.push(
+        `%${projectNumber}%`
+      );
+    }
+
+    const sql = `
+      SELECT
+        b.id,
+        b.projectId,
+        b.billNumber,
+        b.billDate,
+        b.billAmount,
+        b.amountReceived,
+        b.amountReceivedDate,
+        b.invoicePdf,
+        b.remarks,
+        b.createdAt,
+        b.updatedAt,
+
+        CASE
+          WHEN COALESCE(
+            b.amountReceived,
+            0
+          ) <= 0
+            THEN 'Pending'
+
+          WHEN COALESCE(
+            b.amountReceived,
+            0
+          ) >= COALESCE(
+            b.billAmount,
+            0
+          )
+            THEN 'Paid'
+
+          ELSE 'Partial'
+        END AS status,
+
+        p.projectNumber,
+        p.companyName
+
+      FROM amc_bills b
+
+      INNER JOIN projects p
+        ON p.id = b.projectId
+
+      ${whereClause}
+
+      ORDER BY
+        p.projectNumber ASC,
+        b.billNumber ASC
+    `;
+
+    db.all(
+      sql,
+      params,
+      (
+        err,
+        rows
+      ) => {
+        if (err) {
+          return sendDbError(
+            res,
+            err
+          );
+        }
+
+        res.json(
+          rows || []
+        );
+      }
+    );
+  }
+);
+
+/* =========================================================
+   GET ONE BILL
+========================================================= */
+
+app.get(
+  "/api/bills/:id",
+  (
+    req,
+    res
+  ) => {
+    const id =
+      Number(
+        req.params.id
+      );
+
+    if (
+      !Number.isInteger(
+        id
+      ) ||
+      id <= 0
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid bill ID.",
+        });
+    }
+
+    db.get(
+      `
+        SELECT
+          b.*,
+
+          CASE
+            WHEN COALESCE(
+              b.amountReceived,
+              0
+            ) <= 0
+              THEN 'Pending'
+
+            WHEN COALESCE(
+              b.amountReceived,
+              0
+            ) >= COALESCE(
+              b.billAmount,
+              0
+            )
+              THEN 'Paid'
+
+            ELSE 'Partial'
+          END AS status,
+
+          p.projectNumber,
+          p.companyName,
+          p.totalOrderAmount
+
+        FROM amc_bills b
+
+        INNER JOIN projects p
+          ON p.id = b.projectId
+
+        WHERE b.id = ?
+      `,
+      [id],
+      (
+        err,
+        bill
+      ) => {
+        if (err) {
+          return sendDbError(
+            res,
+            err
+          );
+        }
+
+        if (!bill) {
+          return res
+            .status(404)
+            .json({
+              message:
+                "Bill not found.",
+            });
+        }
+
+        res.json(
+          bill
+        );
+      }
+    );
+  }
+);
+
+/* =========================================================
+   CREATE BILL
+   Bill number is automatic per project.
+========================================================= */
+
+app.post(
+  "/api/bills",
+  upload.fields([
+    {
+      name:
+        "invoicePdf",
+      maxCount: 1,
+    },
+  ]),
+  (
+    req,
+    res
+  ) => {
+    const projectNumber =
+      normalizeProjectNumber(
+        req.body.projectNumber
+      );
+
+    const billDate =
+      req.body.billDate ||
+      "";
+
+    const billAmount =
+      toNumber(
+        req.body.billAmount
+      );
+
+    const amountReceived =
+      toNumber(
+        req.body.amountReceived
+      );
+
+    const amountReceivedDate =
+      req.body.amountReceivedDate ||
+      "";
+
+    const remarks =
+      req.body.remarks ||
+      "";
+
+    if (!projectNumber) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Project Number is required.",
+        });
+    }
+
+    if (!billDate) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Bill Date is required.",
+        });
+    }
+
+    const files =
+      req.files ||
+      {};
+
+    const invoiceFile =
+      files
+        .invoicePdf?.[0];
+
+    const invoicePath =
+      invoiceFile
+        ? `/uploads/${invoiceFile.filename}`
+        : "";
+
+    findProjectByNumber(
+      projectNumber,
+      (
+        projectErr,
+        project
+      ) => {
+        if (projectErr) {
+          if (
+            invoiceFile
+          ) {
+            deleteFile(
+              invoicePath
+            );
+          }
+
+          return sendDbError(
+            res,
+            projectErr
+          );
+        }
+
+        if (!project) {
+          if (
+            invoiceFile
+          ) {
+            deleteFile(
+              invoicePath
+            );
+          }
+
+          return res
+            .status(404)
+            .json({
+              message:
+                "Project Number not found.",
+            });
+        }
+
+        getNextBillNumber(
+          project.id,
+          (
+            numberErr,
+            billNumber
+          ) => {
+            if (numberErr) {
+              if (
+                invoiceFile
+              ) {
+                deleteFile(
+                  invoicePath
+                );
+              }
+
+              return sendDbError(
+                res,
+                numberErr
+              );
+            }
+
+            const sql = `
+              INSERT INTO amc_bills (
+                projectId,
+                billNumber,
+                billDate,
+                billAmount,
+                amountReceived,
+                amountReceivedDate,
+                invoicePdf,
+                remarks
+              )
+              VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?
+              )
+            `;
+
+            const values = [
+              project.id,
+              billNumber,
+              billDate,
+              billAmount,
+              amountReceived,
+              amountReceivedDate,
+              invoicePath,
+              remarks,
+            ];
+
+            db.run(
+              sql,
+              values,
+              function (err) {
+                if (err) {
+                  if (
+                    invoiceFile
+                  ) {
+                    deleteFile(
+                      invoicePath
+                    );
+                  }
+
+                  if (
+                    err.message.includes(
+                      "UNIQUE constraint failed"
+                    )
+                  ) {
+                    return res
+                      .status(409)
+                      .json({
+                        message:
+                          "Could not assign the next bill number. Please try again.",
+                      });
+                  }
+
+                  return sendDbError(
+                    res,
+                    err
+                  );
+                }
+
+                res
+                  .status(201)
+                  .json({
+                    message:
+                      "Bill created successfully.",
+
+                    billId:
+                      this.lastID,
+
+                    billNumber,
+                  });
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+);
+
+/* =========================================================
+   UPDATE BILL
+========================================================= */
+
+app.put(
+  "/api/bills/:id",
+  upload.fields([
+    {
+      name:
+        "invoicePdf",
+      maxCount: 1,
+    },
+  ]),
+  (
+    req,
+    res
+  ) => {
+    const id =
+      Number(
+        req.params.id
+      );
+
+    if (
+      !Number.isInteger(
+        id
+      ) ||
+      id <= 0
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid bill ID.",
+        });
+    }
+
+    db.get(
+      `
+        SELECT *
+        FROM amc_bills
+        WHERE id = ?
+      `,
+      [id],
+      (
+        findErr,
+        existing
+      ) => {
+        if (findErr) {
+          return sendDbError(
+            res,
+            findErr
+          );
+        }
+
+        if (!existing) {
+          return res
+            .status(404)
+            .json({
+              message:
+                "Bill not found.",
+            });
+        }
+
+        const projectNumber =
+          normalizeProjectNumber(
+            req.body.projectNumber
+          );
+
+        const billDate =
+          req.body.billDate ||
+          "";
+
+        const billAmount =
+          toNumber(
+            req.body.billAmount
+          );
+
+        const amountReceived =
+          toNumber(
+            req.body.amountReceived
+          );
+
+        const amountReceivedDate =
+          req.body.amountReceivedDate ||
+          "";
+
+        const remarks =
+          req.body.remarks ||
+          "";
+
+        if (!projectNumber) {
+          return res
+            .status(400)
+            .json({
+              message:
+                "Project Number is required.",
+            });
+        }
+
+        if (!billDate) {
+          return res
+            .status(400)
+            .json({
+              message:
+                "Bill Date is required.",
+            });
+        }
+
+        findProjectByNumber(
+          projectNumber,
+          (
+            projectErr,
+            project
+          ) => {
+            if (projectErr) {
+              return sendDbError(
+                res,
+                projectErr
+              );
+            }
+
+            if (!project) {
+              return res
+                .status(404)
+                .json({
+                  message:
+                    "Project Number not found.",
+                });
+            }
+
+            const files =
+              req.files ||
+              {};
+
+            const newInvoice =
+              files
+                .invoicePdf?.[0];
+
+            let invoicePath =
+              existing.invoicePdf ||
+              "";
+
+            if (
+              newInvoice
+            ) {
+              invoicePath =
+                `/uploads/${newInvoice.filename}`;
+            }
+
+            const sql = `
+              UPDATE amc_bills
+              SET
+                projectId = ?,
+                billDate = ?,
+                billAmount = ?,
+                amountReceived = ?,
+                amountReceivedDate = ?,
+                invoicePdf = ?,
+                remarks = ?,
+                updatedAt =
+                  CURRENT_TIMESTAMP
+              WHERE id = ?
+            `;
+
+            const values = [
+              project.id,
+              billDate,
+              billAmount,
+              amountReceived,
+              amountReceivedDate,
+              invoicePath,
+              remarks,
+              id,
+            ];
+
+            db.run(
+              sql,
+              values,
+              function (err) {
+                if (err) {
+                  if (
+                    newInvoice
+                  ) {
+                    deleteFile(
+                      invoicePath
+                    );
+                  }
+
+                  return sendDbError(
+                    res,
+                    err
+                  );
+                }
+
+                if (
+                  newInvoice &&
+                  existing.invoicePdf
+                ) {
+                  deleteFile(
+                    existing.invoicePdf
+                  );
+                }
+
+                res.json({
+                  message:
+                    "Bill updated successfully.",
+                });
+              }
+            );
+          }
+        );
+      }
+    );
+  }
+);
+
+/* =========================================================
+   DELETE BILL
+========================================================= */
+
+app.delete(
+  "/api/bills/:id",
+  (
+    req,
+    res
+  ) => {
+    const id =
+      Number(
+        req.params.id
+      );
+
+    if (
+      !Number.isInteger(
+        id
+      ) ||
+      id <= 0
+    ) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Invalid bill ID.",
+        });
+    }
+
+    db.get(
+      `
+        SELECT *
+        FROM amc_bills
+        WHERE id = ?
+      `,
+      [id],
+      (
+        findErr,
+        bill
+      ) => {
+        if (findErr) {
+          return sendDbError(
+            res,
+            findErr
+          );
+        }
+
+        if (!bill) {
+          return res
+            .status(404)
+            .json({
+              message:
+                "Bill not found.",
+            });
+        }
+
+        db.run(
+          `
+            DELETE FROM amc_bills
+            WHERE id = ?
+          `,
+          [id],
+          function (err) {
+            if (err) {
+              return sendDbError(
+                res,
+                err
+              );
+            }
+
+            deleteFile(
+              bill.invoicePdf
+            );
+
+            res.json({
+              message:
+                "Bill deleted successfully.",
+            });
+          }
+        );
+      }
+    );
+  }
+);
+
+/* =========================================================
    404
 ========================================================= */
 
@@ -2476,10 +3537,12 @@ app.use(
     _req,
     res
   ) => {
-    res.status(404).json({
-      message:
-        "API endpoint not found.",
-    });
+    res
+      .status(404)
+      .json({
+        message:
+          "API endpoint not found.",
+      });
   }
 );
 
@@ -2503,27 +3566,33 @@ app.use(
       err instanceof
       multer.MulterError
     ) {
-      return res.status(400).json({
-        message:
-          err.message,
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            err.message,
+        });
     }
 
     if (
       err?.message ===
       "Only PDF files are allowed."
     ) {
-      return res.status(400).json({
-        message:
-          err.message,
-      });
+      return res
+        .status(400)
+        .json({
+          message:
+            err.message,
+        });
     }
 
-    return res.status(500).json({
-      message:
-        err?.message ||
-        "Internal server error.",
-    });
+    return res
+      .status(500)
+      .json({
+        message:
+          err?.message ||
+          "Internal server error.",
+      });
   }
 );
 

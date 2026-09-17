@@ -105,6 +105,85 @@ function getStatusClass(status) {
   if (status === "Due Soon") return "status due-soon";
   return "status upcoming";
 }
+function getAMCMonths(amcType) {
+  switch (amcType) {
+    case "Quarterly":
+      return 3;
+    case "Half Yearly":
+      return 6;
+    case "Yearly":
+      return 12;
+    case "2 Yearly":
+      return 24;
+    case "3 Yearly":
+      return 36;
+    default:
+      return 3;
+  }
+}
+
+function addMonthsToDate(dateString, months) {
+  if (!dateString) return "";
+
+  const parts = String(dateString).split("-");
+  if (parts.length !== 3) return "";
+
+  const year = Number(parts[0]);
+  const month = Number(parts[1]) - 1;
+  const day = Number(parts[2]);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day)
+  ) {
+    return "";
+  }
+
+  const targetMonthIndex = month + months;
+  const targetYear =
+    year + Math.floor(targetMonthIndex / 12);
+  const targetMonth =
+    targetMonthIndex % 12;
+
+  const daysInTargetMonth =
+    new Date(
+      targetYear,
+      targetMonth + 1,
+      0
+    ).getDate();
+
+  const targetDay =
+    Math.min(day, daysInTargetMonth);
+
+  const result = new Date(
+    targetYear,
+    targetMonth,
+    targetDay
+  );
+
+  return `${result.getFullYear()}-${String(
+    result.getMonth() + 1
+  ).padStart(2, "0")}-${String(
+    result.getDate()
+  ).padStart(2, "0")}`;
+}
+
+function calculateNextAMCDate(project) {
+  if (!project) return "";
+
+  const baseDate =
+    project.lastAMCDate ||
+    project.amcStartDate ||
+    "";
+
+  if (!baseDate) return "";
+
+  return addMonthsToDate(
+    baseDate,
+    getAMCMonths(project.amcType)
+  );
+}
 
 function emptyProject() {
   return {
@@ -144,6 +223,27 @@ function App() {
 
   const [error, setError] = useState("");
 
+  const [selectedBill, setSelectedBill] =
+    useState(null);
+
+  const [billForm, setBillForm] =
+    useState({
+      billDate: "",
+      billAmount: "",
+      amountReceived: "",
+      amountReceivedDate: "",
+      remarks: "",
+    });
+
+  const [billInvoiceFile, setBillInvoiceFile] =
+    useState(null);
+
+  const [billModalOpen, setBillModalOpen] =
+    useState(false);
+
+  const [billSaving, setBillSaving] =
+    useState(false);
+
   /* =========================
      FETCH PROJECTS
   ========================= */
@@ -167,7 +267,15 @@ function App() {
       }
 
       setProjects(
-        Array.isArray(data) ? data : []
+        Array.isArray(data)
+          ? data.map((project) => ({
+              ...project,
+              nextAMCDate:
+                calculateNextAMCDate(project) ||
+                project.nextAMCDate ||
+                "",
+            }))
+          : []
       );
     } catch (err) {
       console.error(err);
@@ -423,7 +531,13 @@ function App() {
       The detailed endpoint returns:
       project fields + calculated totals + visits
     */
-    setSelectedProject(data);
+    setSelectedProject({
+      ...data,
+      nextAMCDate:
+        calculateNextAMCDate(data) ||
+        data.nextAMCDate ||
+        "",
+    });
     setPage("project-details");
 
   } catch (err) {
@@ -438,6 +552,10 @@ function App() {
     */
     setSelectedProject({
       ...project,
+      nextAMCDate:
+        calculateNextAMCDate(project) ||
+        project.nextAMCDate ||
+        "",
       visits:
         project.visits || [],
     });
@@ -453,6 +571,224 @@ function App() {
     setLoading(false);
   }
 }
+
+  /* =========================
+     BILL MANAGEMENT
+  ========================= */
+
+  function handleBillChange(e) {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setBillForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  }
+
+  function openAddBill() {
+    if (!selectedProject) return;
+
+    setSelectedBill(null);
+    setBillForm({
+      billDate: "",
+      billAmount: "",
+      amountReceived: "",
+      amountReceivedDate: "",
+      remarks: "",
+    });
+
+    setBillInvoiceFile(null);
+    setBillModalOpen(true);
+  }
+
+  function openEditBill(bill) {
+    setSelectedBill(bill);
+
+    setBillForm({
+      billDate: bill.billDate || "",
+      billAmount: bill.billAmount ?? "",
+      amountReceived:
+        bill.amountReceived ?? "",
+      amountReceivedDate:
+        bill.amountReceivedDate || "",
+      remarks: bill.remarks || "",
+    });
+
+    setBillInvoiceFile(null);
+    setBillModalOpen(true);
+  }
+
+  async function refreshSelectedProject() {
+    if (!selectedProject) return;
+
+    const response = await fetch(
+      `${API}/projects/${selectedProject.id}?_=${Date.now()}`,
+      {
+        cache: "no-store",
+      }
+    );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+          "Failed to refresh project details"
+      );
+    }
+
+    setSelectedProject({
+      ...data,
+      nextAMCDate:
+        calculateNextAMCDate(data) ||
+        data.nextAMCDate ||
+        "",
+    });
+  }
+
+  async function saveBill(e) {
+    e.preventDefault();
+
+    if (!selectedProject) return;
+
+    if (!billForm.billDate) {
+      alert("Bill Date is required.");
+      return;
+    }
+
+    try {
+      setBillSaving(true);
+
+      const url = selectedBill
+        ? `${API}/bills/${selectedBill.id}`
+        : `${API}/bills`;
+
+      const method = selectedBill
+        ? "PUT"
+        : "POST";
+
+      const formData = new FormData();
+
+      formData.append(
+        "projectNumber",
+        selectedProject.projectNumber
+      );
+
+      formData.append(
+        "billDate",
+        billForm.billDate || ""
+      );
+
+      formData.append(
+        "billAmount",
+        String(
+          Number(billForm.billAmount) || 0
+        )
+      );
+
+      formData.append(
+        "amountReceived",
+        String(
+          Number(billForm.amountReceived) || 0
+        )
+      );
+
+      formData.append(
+        "amountReceivedDate",
+        billForm.amountReceivedDate || ""
+      );
+
+      formData.append(
+        "remarks",
+        billForm.remarks || ""
+      );
+
+      if (billInvoiceFile) {
+        formData.append(
+          "invoicePdf",
+          billInvoiceFile
+        );
+      }
+
+      const response = await fetch(
+        url,
+        {
+          method,
+          body: formData,
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Failed to save bill"
+        );
+      }
+
+      await refreshSelectedProject();
+      await fetchProjects();
+
+      setBillModalOpen(false);
+      setSelectedBill(null);
+      setBillInvoiceFile(null);
+
+      alert(
+        selectedBill
+          ? "Bill updated successfully."
+          : "Bill added successfully."
+      );
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    } finally {
+      setBillSaving(false);
+    }
+  }
+
+  async function deleteBill(billId) {
+    const confirmed =
+      window.confirm(
+        "Delete this bill?"
+      );
+
+    if (!confirmed) return;
+
+    try {
+      setBillSaving(true);
+
+      const response = await fetch(
+        `${API}/bills/${billId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            "Failed to delete bill"
+        );
+      }
+
+      await refreshSelectedProject();
+      await fetchProjects();
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
+    } finally {
+      setBillSaving(false);
+    }
+  }
 
   /* =========================
      DELETE VISIT
@@ -822,202 +1158,289 @@ function App() {
      PROJECTS PAGE
   ========================= */
 
-  function renderProjects() {
-    return (
-      <>
-        <div className="page-header">
+  /* =========================
+   PROJECTS PAGE
+========================= */
 
-          <div>
-            <h1>
-              All Projects
-            </h1>
+function renderProjects() {
+  return (
+    <>
+      <div className="page-header">
 
-            <p>
-              Manage your AMC projects
-            </p>
-          </div>
+        <div>
+          <h1>
+            All Projects
+          </h1>
 
-          <button
-            className="primary-btn"
-            onClick={() => {
-              setProjectForm(
-                emptyProject()
-              );
-
-              setEditingProjectId(
-                null
-              );
-
-              setPage(
-                "add-project"
-              );
-            }}
-          >
-            + Add Project
-          </button>
-
+          <p>
+            Manage your AMC projects
+          </p>
         </div>
 
-        <div className="search-box">
-          <input
-            type="text"
-            placeholder="Search by project number or company..."
-            value={search}
-            onChange={(e) =>
-              setSearch(
-                e.target.value
-              )
-            }
-          />
-        </div>
+        <button
+          className="primary-btn"
+          onClick={() => {
+            setProjectForm(
+              emptyProject()
+            );
 
-        <div className="table-card">
+            setEditingProjectId(
+              null
+            );
 
-  <table>
+            setPage(
+              "add-project"
+            );
+          }}
+        >
+          + Add Project
+        </button>
 
-    <thead>
-      <tr>
-        <th>Project No.</th>
-        <th>Company</th>
-        <th>Total Amount</th>
-        <th>AMC Type</th>
-        <th>Last AMC</th>
-        <th>Next AMC</th>
-        <th>AMC Left</th>
-        <th>Status</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
+      </div>
 
-    <tbody>
+      <div className="search-box">
 
-      {filteredProjects.length === 0 ? (
+        <input
+          type="text"
+          placeholder="Search by project number or company..."
+          value={search}
+          onChange={(e) =>
+            setSearch(
+              e.target.value
+            )
+          }
+        />
 
-        <tr>
-          <td
-            colSpan="9"
-            className="empty-cell"
-          >
-            No projects found.
-          </td>
-        </tr>
+      </div>
 
-      ) : (
+      <div className="table-card">
 
-        filteredProjects.map(
-          (project) => {
+        <table>
 
-            const status =
-              getAMCStatus(
-                project.nextAMCDate
-              );
+          <thead>
 
-            return (
-              <tr
-                key={project.id}
-              >
+            <tr>
 
-                <td>
-                  {project.projectNumber}
-                </td>
+              <th>
+                Project
+              </th>
 
-                <td>
-                  {project.companyName}
-                </td>
+              <th>
+                Company
+              </th>
 
-                <td>
-                  {formatMoney(
-                    project.totalOrderAmount
-                  )}
-                </td>
+              <th>
+                Total Amount
+              </th>
 
-                <td>
-                  {project.amcType}
-                </td>
+              <th>
+                AMC Type
+              </th>
 
-                <td>
-                  {project.lastAMCDate || "-"}
-                </td>
+              <th>
+                Next AMC
+              </th>
 
-                <td>
-                  {project.nextAMCDate || "-"}
-                </td>
+              <th>
+                AMC Left
+              </th>
 
-                <td>
-                  {getAMCLeft(
-                    project.amcEndDate
-                  )}
-                </td>
+              <th>
+                Bills
+              </th>
 
-                {/* STATUS */}
+              <th>
+                Amount Received
+              </th>
 
-                <td>
-                  <span
-                    className={`status ${
-                      status === "Missed"
-                        ? "missed"
-                        : status === "Due Soon"
-                        ? "due-soon"
-                        : "upcoming"
-                    }`}
-                  >
-                    {status}
-                  </span>
-                </td>
+              <th>
+                Status
+              </th>
 
-                {/* ACTIONS */}
+              <th>
+                View
+              </th>
 
-                <td className="actions">
+              <th>
+                Edit
+              </th>
 
-                  <button
-                    className="small-btn view"
-                    onClick={() =>
-                      openProject(
-                        project
-                      )
-                    }
-                  >
-                    View
-                  </button>
+              <th>
+                Delete
+              </th>
 
-                  <button
-                    className="small-btn edit"
-                    onClick={() =>
-                      editProject(
-                        project
-                      )
-                    }
-                  >
-                    Edit
-                  </button>
+            </tr>
 
-                  <button
-                    className="small-btn delete"
-                    onClick={() =>
-                      deleteProject(
-                        project.id
-                      )
-                    }
-                  >
-                    Delete
-                  </button>
+          </thead>
 
+          <tbody>
+
+            {filteredProjects.length === 0 ? (
+
+              <tr>
+
+                <td
+                  colSpan="12"
+                  className="empty-cell"
+                >
+                  No projects found.
                 </td>
 
               </tr>
-            );
-          }
-        )
-      )}
 
-    </tbody>
+            ) : (
 
-  </table>
+              filteredProjects.map(
+                (project) => (
 
-</div>
-      </>
-    );
-  }
+                  <tr
+                    key={
+                      project.id
+                    }
+                  >
+
+                    {/* PROJECT */}
+
+                    <td>
+                      {
+                        project.projectNumber
+                      }
+                    </td>
+
+                    {/* COMPANY */}
+
+                    <td>
+                      {
+                        project.companyName
+                      }
+                    </td>
+
+                    {/* TOTAL ORDER AMOUNT */}
+
+                    <td>
+                      {formatMoney(
+                        project.totalOrderAmount
+                      )}
+                    </td>
+
+                    {/* AMC TYPE */}
+
+                    <td>
+                      {
+                        project.amcType
+                      }
+                    </td>
+
+                    {/* NEXT AMC */}
+
+                    <td>
+                      {
+                        project.nextAMCDate ||
+                        "-"
+                      }
+                    </td>
+
+                    {/* AMC LEFT */}
+
+                    <td>
+                      {getAMCLeft(
+                        project.amcEndDate
+                      )}
+                    </td>
+
+                    {/* BILLS */}
+
+                    <td>
+                      {
+                        project.billCount ||
+                        0
+                      }
+                    </td>
+
+                    {/* AMOUNT RECEIVED */}
+
+                    <td>
+                      {formatMoney(
+                        project.receivedAmount
+                      )}
+                    </td>
+
+                    {/* STATUS */}
+
+                    <td>
+                      <span
+                        className={getStatusClass(
+                          getAMCStatus(
+                            project.nextAMCDate
+                          )
+                        )}
+                      >
+                        {getAMCStatus(
+                          project.nextAMCDate
+                        )}
+                      </span>
+                    </td>
+
+                    {/* VIEW */}
+
+                    <td>
+                      <button
+                        className="small-btn view"
+                        onClick={() =>
+                          openProject(
+                            project
+                          )
+                        }
+                      >
+                        View
+                      </button>
+                    </td>
+
+                    {/* EDIT */}
+
+                    <td>
+                      <button
+                        className="small-btn edit"
+                        onClick={() =>
+                          editProject(
+                            project
+                          )
+                        }
+                      >
+                        Edit
+                      </button>
+                    </td>
+
+                    {/* DELETE */}
+
+                    <td>
+                      <button
+                        className="small-btn delete"
+                        onClick={() =>
+                          deleteProject(
+                            project.id
+                          )
+                        }
+                      >
+                        Delete
+                      </button>
+                    </td>
+
+                  </tr>
+
+                )
+              )
+
+            )}
+
+          </tbody>
+
+        </table>
+
+      </div>
+    </>
+  );
+}
 
   /* =========================
      ADD PROJECT PAGE
@@ -1220,6 +1643,14 @@ function App() {
                 <option>
                   Yearly
                 </option>
+
+              <option>
+                2 Yearly
+              </option>
+
+              <option>
+                3 Yearly
+              </option>
               </select>
             </div>
 
@@ -1346,6 +1777,9 @@ function App() {
     const visits =
       selectedProject.visits || [];
 
+    const bills =
+      selectedProject.bills || [];
+
     return (
       <>
         <div className="page-header">
@@ -1387,6 +1821,7 @@ function App() {
           </div>
 
         </div>
+
         <div className="project-finance-grid">
 
           <div className="project-finance-card">
@@ -1423,13 +1858,12 @@ function App() {
             </strong>
           </div>
 
-          
-
         </div>
 
         <div className="details-grid-large">
 
           <div className="details-card">
+
             <h2>
               Project Information
             </h2>
@@ -1498,6 +1932,7 @@ function App() {
                   }
                 </strong>
               </div>
+
               <div>
                 <span>
                   Total Order Amount
@@ -1589,6 +2024,7 @@ function App() {
             </div>
 
             <div className="remarks-display">
+
               <span>
                 Remarks
               </span>
@@ -1599,9 +2035,169 @@ function App() {
                   "No remarks added."
                 }
               </p>
+
             </div>
 
           </div>
+
+        </div>
+
+        <div className="details-card visits-card">
+
+          <div className="section-header">
+
+            <div>
+              <h2>
+                Bills
+              </h2>
+
+              <p>
+                Billing and payment details
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className="primary-btn"
+              onClick={
+                openAddBill
+              }
+            >
+              + Add Bill
+            </button>
+
+          </div>
+
+          {bills.length === 0 ? (
+            <div className="empty-state">
+              No bills added yet.
+            </div>
+          ) : (
+            <div className="table-card">
+
+              <table>
+
+                <thead>
+                  <tr>
+                    <th>
+                      Bill No.
+                    </th>
+
+                    <th>
+                      Bill Date
+                    </th>
+
+                    <th>
+                      Bill Amount
+                    </th>
+
+                    <th>
+                      Amount Received
+                    </th>
+
+                    <th>
+                      Received Date
+                    </th>
+
+                    <th>
+                      Status
+                    </th>
+
+                    <th>
+                      View/Edit
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+
+                  {bills.map(
+                    (bill) => (
+                      <tr
+                        key={
+                          bill.id
+                        }
+                      >
+
+                        <td>
+                          {
+                            bill.billNumber
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            bill.billDate ||
+                            "-"
+                          }
+                        </td>
+
+                        <td>
+                          {formatMoney(
+                            bill.billAmount
+                          )}
+                        </td>
+
+                        <td>
+                          {formatMoney(
+                            bill.amountReceived
+                          )}
+                        </td>
+
+                        <td>
+                          {
+                            bill.amountReceivedDate ||
+                            "-"
+                          }
+                        </td>
+
+                        <td>
+
+                          <strong
+                            className={
+                              bill.status ===
+                              "Paid"
+                                ? "status completed"
+                                : bill.status ===
+                                  "Partial"
+                                ? "status due-soon"
+                                : "status upcoming"
+                            }
+                          >
+                            {
+                              bill.status ||
+                              "Pending"
+                            }
+                          </strong>
+
+                        </td>
+
+                        <td>
+
+                          <button
+                            type="button"
+                            className="small-btn view"
+                            onClick={() =>
+                              openEditBill(
+                                bill
+                              )
+                            }
+                          >
+                            View/Edit
+                          </button>
+
+                        </td>
+
+                      </tr>
+                    )
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+          )}
 
         </div>
 
@@ -1696,16 +2292,21 @@ function App() {
                       </div>
 
                       <div>
-                        <span>Employee Name</span>
+                        <span>
+                          Employee Name
+                        </span>
 
                         <strong>
-                          {visit.employeeName || "-"}
+                          {
+                            visit.employeeName ||
+                            "-"
+                          }
                         </strong>
                       </div>
 
                       <div className="visit-actions">
 
-                        <button
+                        {/* <button
                           className="small-btn view"
                           onClick={() => {
                             setSelectedVisit(visit);
@@ -1713,7 +2314,7 @@ function App() {
                           }}
                         >
                           View
-                        </button>
+                        </button> */}
 
                         <button
                           className="small-btn delete"
@@ -1738,10 +2339,258 @@ function App() {
 
         </div>
 
+        {billModalOpen && (
+          <div className="modal-overlay">
+
+            <div className="modal-card">
+
+              <div className="modal-header">
+
+                <div>
+                  <h2>
+                    {selectedBill
+                      ? "Edit Bill"
+                      : "Add Bill"}
+                  </h2>
+
+                  <p>
+                    Project{" "}
+                    {
+                      selectedProject.projectNumber
+                    }
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => {
+                    setBillModalOpen(
+                      false
+                    );
+                    setSelectedBill(
+                      null
+                    );
+                    setBillInvoiceFile(null);
+                  }}
+                >
+                  ×
+                </button>
+
+              </div>
+
+              <form
+                onSubmit={
+                  saveBill
+                }
+              >
+
+                <div className="form-grid">
+
+                  {selectedBill && (
+                    <div className="field">
+
+                      <label>
+                        Bill Number
+                      </label>
+
+                      <input
+                        value={
+                          selectedBill.billNumber
+                        }
+                        disabled
+                      />
+
+                    </div>
+                  )}
+
+                  <div className="field">
+
+                    <label>
+                      Bill Date *
+                    </label>
+
+                    <input
+                      type="date"
+                      name="billDate"
+                      value={
+                        billForm.billDate
+                      }
+                      onChange={
+                        handleBillChange
+                      }
+                      required
+                    />
+
+                  </div>
+
+                  <div className="field">
+
+                    <label>
+                      Bill Amount
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="billAmount"
+                      value={
+                        billForm.billAmount
+                      }
+                      onChange={
+                        handleBillChange
+                      }
+                      placeholder="0"
+                    />
+
+                  </div>
+
+                  <div className="field">
+
+                    <label>
+                      Amount Received
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      name="amountReceived"
+                      value={
+                        billForm.amountReceived
+                      }
+                      onChange={
+                        handleBillChange
+                      }
+                      placeholder="0"
+                    />
+
+                  </div>
+
+                  <div className="field">
+
+                    <label>
+                      Received Date
+                    </label>
+
+                    <input
+                      type="date"
+                      name="amountReceivedDate"
+                      value={
+                        billForm.amountReceivedDate
+                      }
+                      onChange={
+                        handleBillChange
+                      }
+                    />
+
+                  </div>
+
+                  <div className="field full">
+                    <label>
+                      Invoice PDF
+                    </label>
+
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) =>
+                        setBillInvoiceFile(
+                          e.target.files?.[0] || null
+                        )
+                      }
+                    />
+
+                    {selectedBill?.invoicePdf && (
+                      <small>
+                        Current invoice:{" "}
+                        <a
+                          href={`${API.replace(/\/api$/, "")}${selectedBill.invoicePdf}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View PDF
+                        </a>
+                      </small>
+                    )}
+
+                    {billInvoiceFile && (
+                      <small>
+                        New file: {billInvoiceFile.name}
+                      </small>
+                    )}
+                  </div>
+
+                  <div className="field full">
+                    <label>
+                      Remarks
+                    </label>
+
+                    <textarea
+                      name="remarks"
+                      value={
+                        billForm.remarks
+                      }
+                      onChange={
+                        handleBillChange
+                      }
+                      placeholder="Remarks"
+                      rows="3"
+                    />
+
+                  </div>
+
+                </div>
+
+                <div className="form-actions">
+
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => {
+                      setBillModalOpen(
+                        false
+                      );
+                      setSelectedBill(
+                        null
+                      );
+                      setBillInvoiceFile(null);
+                    }}
+                    disabled={
+                      billSaving
+                    }
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="primary-btn"
+                    disabled={
+                      billSaving
+                    }
+                  >
+                    {billSaving
+                      ? "Saving..."
+                      : selectedBill
+                      ? "Update Bill"
+                      : "Save Bill"}
+                  </button>
+
+                </div>
+
+              </form>
+
+            </div>
+
+          </div>
+        )}
 
       </>
     );
   }
+
 
   /* =========================
      MAIN PAGE
@@ -1842,9 +2691,15 @@ function App() {
                     );
                   }
 
-                  setSelectedProject(
-                    detailData
-                  );
+                  setSelectedProject({
+                    ...detailData,
+                    nextAMCDate:
+                      calculateNextAMCDate(
+                        detailData
+                      ) ||
+                      detailData.nextAMCDate ||
+                      "",
+                  });
 
                   setPage(
                     "project-details"

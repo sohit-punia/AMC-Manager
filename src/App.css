@@ -1121,3 +1121,340 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+/* =========================
+   PROJECT TABLE ACTION COLUMNS
+========================= */
+
+.table-card table th:nth-last-child(-n + 3),
+.table-card table td:nth-last-child(-n + 3) {
+  width: 70px;
+  min-width: 70px;
+  max-width: 70px;
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: center;
+}
+
+.table-card table th:nth-last-child(-n + 3) {
+  white-space: nowrap;
+}
+
+.table-card table td:nth-last-child(-n + 3) .small-btn {
+  padding: 6px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   BILL MODAL
+========================================================= */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 24px;
+
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 650px;
+  max-height: calc(100vh - 48px);
+
+  overflow-y: auto;
+
+  background: #ffffff;
+  border-radius: 14px;
+
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
+
+  padding: 0;
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
+
+  padding: 22px 24px 18px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h2 {
+  margin: 0;
+
+  font-size: 24px;
+  line-height: 1.2;
+
+  color: #172033;
+}
+
+.modal-header p {
+  margin: 6px 0 0;
+
+  font-size: 14px;
+  color: #64748b;
+}
+
+.modal-close {
+  width: 36px;
+  height: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #f1f5f9;
+  color: #475569;
+
+  font-size: 22px;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition: 0.2s ease;
+}
+
+.modal-close:hover {
+  background: #e2e8f0;
+  color: #111827;
+}
+
+/* Form inside modal */
+
+.modal-card form {
+  padding: 24px;
+}
+
+.modal-card .form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.modal-card .field {
+  min-width: 0;
+}
+
+.modal-card .field.full {
+  grid-column: 1 / -1;
+}
+
+.modal-card .field label {
+  display: block;
+
+  margin-bottom: 7px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  color: #334155;
+}
+
+.modal-card .field input,
+.modal-card .field select,
+.modal-card .field textarea {
+  width: 100%;
+  box-sizing: border-box;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+
+  background: #ffffff;
+  color: #111827;
+
+  font-size: 14px;
+
+  padding: 11px 12px;
+
+  outline: none;
+
+  transition: border-color 0.2s ease,
+              box-shadow 0.2s ease;
+}
+
+.modal-card .field input:focus,
+.modal-card .field select:focus,
+.modal-card .field textarea:focus {
+  border-color: #2563eb;
+
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.modal-card .field textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+/* File upload */
+
+.modal-card .field input[type="file"] {
+  padding: 8px;
+
+  background: #f8fafc;
+
+  cursor: pointer;
+}
+
+.modal-card .field small {
+  display: block;
+
+  margin-top: 8px;
+
+  font-size: 13px;
+  line-height: 1.4;
+
+  color: #64748b;
+}
+
+.modal-card .field small a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.modal-card .field small a:hover {
+  text-decoration: underline;
+}
+
+/* Bottom buttons */
+
+.modal-card .form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 24px;
+  padding-top: 18px;
+
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Keep buttons normal inside modal */
+
+.modal-card .form-actions button {
+  min-width: 100px;
+}
+
+/* =========================================================
+   RESPONSIVE MODAL
+========================================================= */
+
+@media (max-width: 700px) {
+  .modal-overlay {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .modal-card {
+    max-height: calc(100vh - 32px);
+    border-radius: 12px;
+  }
+
+  .modal-card .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-card .field.full {
+    grid-column: auto;
+  }
+
+  .modal-header {
+    padding: 18px;
+  }
+
+  .modal-card form {
+    padding: 18px;
+  }
+
+  .modal-card .form-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .modal-card .form-actions button {
+    width: 100%;
+  }
+}
+/* =========================================================
+   BILLS TABLE - COLUMN SPACING
+========================================================= */
+
+.details-card.visits-card .table-card table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.details-card.visits-card .table-card table th:nth-child(1),
+.details-card.visits-card .table-card table td:nth-child(1) {
+  width: 9%;
+}
+
+.details-card.visits-card .table-card table th:nth-child(2),
+.details-card.visits-card .table-card table td:nth-child(2) {
+  width: 14%;
+}
+
+.details-card.visits-card .table-card table th:nth-child(3),
+.details-card.visits-card .table-card table td:nth-child(3) {
+  width: 16%;
+}
+
+.details-card.visits-card .table-card table th:nth-child(4),
+.details-card.visits-card .table-card table td:nth-child(4) {
+  width: 18%;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.details-card.visits-card .table-card table th:nth-child(5),
+.details-card.visits-card .table-card table td:nth-child(5) {
+  width: 16%;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.details-card.visits-card .table-card table th:nth-child(6),
+.details-card.visits-card .table-card table td:nth-child(6) {
+  width: 12%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.details-card.visits-card .table-card table th:nth-child(7),
+.details-card.visits-card .table-card table td:nth-child(7) {
+  width: 15%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Keep money/date values on one line */
+.details-card.visits-card .table-card table td:nth-child(3),
+.details-card.visits-card .table-card table td:nth-child(4),
+.details-card.visits-card .table-card table td:nth-child(5) {
+  white-space: nowrap;
+}
+
+
+
+.loading-banner {
+  pointer-events: none;
+}
